@@ -54,30 +54,13 @@ pub fn keccak256_x2(input0: &[u8], input1: &[u8], output0: &mut [u8; 32], output
     unsafe {
         let mut state = [vdupq_n_u64(0); 25];
 
-        // Absorb 64 bytes (8 words) from each input
+        // Absorb 64 bytes (8 words) from each input — raw pointer reads, no bounds checks
+        let p0 = input0.as_ptr() as *const u64;
+        let p1 = input1.as_ptr() as *const u64;
         for i in 0..8 {
-            let off = i * 8;
-            let w0 = u64::from_le_bytes([
-                input0[off],
-                input0[off + 1],
-                input0[off + 2],
-                input0[off + 3],
-                input0[off + 4],
-                input0[off + 5],
-                input0[off + 6],
-                input0[off + 7],
-            ]);
-            let w1 = u64::from_le_bytes([
-                input1[off],
-                input1[off + 1],
-                input1[off + 2],
-                input1[off + 3],
-                input1[off + 4],
-                input1[off + 5],
-                input1[off + 6],
-                input1[off + 7],
-            ]);
-            state[i] = vcombine_u64(vcreate_u64(w0), vcreate_u64(w1));
+            let w0 = p0.add(i).read_unaligned().to_le();
+            let w1 = p1.add(i).read_unaligned().to_le();
+            *state.get_unchecked_mut(i) = vcombine_u64(vcreate_u64(w0), vcreate_u64(w1));
         }
 
         // Padding: byte 64 → 0x01 into word 8; byte 135 → 0x80 into word 16
@@ -169,12 +152,13 @@ pub fn keccak256_x2(input0: &[u8], input1: &[u8], output0: &mut [u8; 32], output
             state[0] = veorq_u64(state[0], vdupq_n_u64(RC[round]));
         }
 
-        // Squeeze: first 4 words = 32 bytes
+        // Squeeze: first 4 words = 32 bytes — raw pointer writes, no bounds checks
+        let out0 = output0.as_mut_ptr() as *mut u64;
+        let out1 = output1.as_mut_ptr() as *mut u64;
         for i in 0..4 {
-            let lo = vgetq_lane_u64(state[i], 0);
-            let hi = vgetq_lane_u64(state[i], 1);
-            output0[i * 8..(i + 1) * 8].copy_from_slice(&lo.to_le_bytes());
-            output1[i * 8..(i + 1) * 8].copy_from_slice(&hi.to_le_bytes());
+            let s = *state.get_unchecked(i);
+            out0.add(i).write_unaligned(vgetq_lane_u64(s, 0).to_le());
+            out1.add(i).write_unaligned(vgetq_lane_u64(s, 1).to_le());
         }
     }
 }

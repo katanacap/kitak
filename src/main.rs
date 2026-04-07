@@ -170,10 +170,29 @@ fn handle_item(pattern: &str, flags: &VanityFlags) {
     let vanity_mode = flags.vanity_mode.unwrap_or(VanityMode::Prefix);
 
     // For suffix-only mode with -s, the actual pattern is in suffix_pattern
-    let effective_pattern = if vanity_mode == VanityMode::Suffix && pattern.is_empty() {
-        flags.suffix_pattern.as_deref().unwrap_or("")
+    let effective_pattern = if vanity_mode == VanityMode::Suffix {
+        if !pattern.is_empty() && flags.suffix_pattern.is_some() {
+            // Ambiguous: both positional and -s provided without -p
+            // Treat positional as prefix → combined mode
+            // (handled below by overriding vanity_mode)
+            pattern
+        } else if pattern.is_empty() {
+            flags.suffix_pattern.as_deref().unwrap_or("")
+        } else {
+            pattern
+        }
     } else {
         pattern
+    };
+
+    // If suffix-only mode but positional arg also provided, switch to prefix+suffix
+    let vanity_mode = if vanity_mode == VanityMode::Suffix
+        && !pattern.is_empty()
+        && flags.suffix_pattern.is_some()
+    {
+        VanityMode::Prefix
+    } else {
+        vanity_mode
     };
 
     let mode_str = match vanity_mode {

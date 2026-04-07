@@ -30,7 +30,7 @@ $ kitak -p 1111 -s 1111 -t 6
 
 |  | kitak | typical vanity gen |
 |--|-------|-------------------|
-| ETH speed (6 threads) | **6.5M keys/sec** | ~0.3M keys/sec |
+| ETH speed (6 threads) | **14M+ keys/sec** | ~0.3M keys/sec |
 | Prefix + suffix search | `-p dead -s beef` | regex only (slow) |
 | Chains | ETH + BTC + SOL | usually one |
 | SIMD acceleration | NEON on Apple Silicon | none |
@@ -40,7 +40,7 @@ $ kitak -p 1111 -s 1111 -t 6
 1. **No hex encoding in the hot loop** — patterns compared directly against raw Keccak hash bytes
 2. **Montgomery batch inversion** — 1 modular inversion for 256 keys instead of 256 (ETH and BTC)
 3. **Incremental keys** (P += G) — EC point addition is ~50x cheaper than full scalar multiplication
-4. **2-way NEON Keccak** — hashes 2 keys per pass on ARM with compile-time constant rotations
+4. **2-way NEON Keccak** — hashes 2 keys per pass on ARM with zero bounds checks (unsafe raw pointers)
 5. **jemalloc** — optimized allocator for multi-threaded workloads
 
 ## Quick start
@@ -159,7 +159,7 @@ abc -s --sol
 
 ```toml
 [dependencies]
-kitak = "3.1"  # all chains included by default
+kitak = "3.2"  # all chains included by default
 ```
 
 ### Basic
@@ -202,12 +202,12 @@ Apple Silicon, `fill_batch` (256 keys per batch):
 | **BTC** | 2.79 ms | 1.03 ms | 4.0 us | **2.7x** |
 | **SOL** | 2.45 ms | 2.47 ms | 9.6 us | 1.0x |
 
-ETH fast path (raw bytes + SIMD) vs generic:
+ETH fast path (raw bytes + SIMD + unsafe) vs generic:
 
 | Benchmark | Generic | Fast path | Speedup |
 |-----------|---------|-----------|---------|
-| ETH prefix 2-char | 5.87 ms | 246 us | **23.8x** |
-| ETH prefix 3-char | 11.97 ms | 757 us | **15.8x** |
+| ETH prefix 2-char | 5.87 ms | 150 us | **39x** |
+| ETH prefix 3-char | 11.97 ms | 420 us | **28.5x** |
 
 ## Architecture
 

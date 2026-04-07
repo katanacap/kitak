@@ -77,6 +77,42 @@ impl RawPattern {
         })
     }
 
+    /// Parse a hex pattern for suffix matching (pairs from the right).
+    pub fn from_hex_suffix(hex_str: &str) -> Result<Self, VanityError> {
+        let hex_lower = hex_str.to_ascii_lowercase();
+
+        if hex_lower.chars().any(|c| !c.is_ascii_hexdigit()) {
+            return Err(VanityError::InputNotBase16);
+        }
+
+        let nibbles: Vec<u8> = hex_lower
+            .bytes()
+            .map(|b| match b {
+                b'0'..=b'9' => b - b'0',
+                b'a'..=b'f' => b - b'a' + 10,
+                _ => unreachable!(),
+            })
+            .collect();
+
+        let has_trailing_nibble = nibbles.len() % 2 == 1;
+        let trailing_nibble = if has_trailing_nibble { nibbles[0] } else { 0 };
+
+        // Pair nibbles from the right (skip first nibble if odd)
+        let start = if has_trailing_nibble { 1 } else { 0 };
+        let mut full_bytes = Vec::with_capacity((nibbles.len() - start) / 2);
+        let mut i = start;
+        while i + 1 < nibbles.len() {
+            full_bytes.push((nibbles[i] << 4) | nibbles[i + 1]);
+            i += 2;
+        }
+
+        Ok(RawPattern {
+            full_bytes,
+            has_trailing_nibble,
+            trailing_nibble,
+        })
+    }
+
     pub fn hex_len(&self) -> usize {
         self.full_bytes.len() * 2 + if self.has_trailing_nibble { 1 } else { 0 }
     }
@@ -176,7 +212,7 @@ pub fn find_eth_vanity_raw(
     threads: usize,
 ) -> Result<EthereumKeyPair, VanityError> {
     let prefix_pattern = RawPattern::from_hex(prefix)?;
-    let suffix_pattern = RawPattern::from_hex(suffix)?;
+    let suffix_pattern = RawPattern::from_hex_suffix(suffix)?;
 
     if prefix_pattern.hex_len() + suffix_pattern.hex_len() > 40 {
         return Err(VanityError::RequestTooLong);
@@ -326,6 +362,12 @@ pub fn find_eth_vanity_raw(
                     let enc0 = affine_batch[i].to_encoded_point(false);
                     let enc1 = affine_batch[i + 1].to_encoded_point(false);
 
+                    // Skip identity points (astronomically unlikely, but prevents UB)
+                    if enc0.len() < 65 || enc1.len() < 65 {
+                        i += 2;
+                        continue;
+                    }
+
                     crate::vanity_addr_generator::keccak_simd::keccak256_x2(
                         unsafe { enc0.as_bytes().get_unchecked(1..65) },
                         unsafe { enc1.as_bytes().get_unchecked(1..65) },
@@ -431,8 +473,26 @@ mod tests {
         let mut addr = [0u8; 20];
         addr[18] = 0x11;
         addr[19] = 0x11;
-        let pat = RawPattern::from_hex("1111").unwrap();
+        let pat = RawPattern::from_hex_suffix("1111").unwrap();
         assert!(check_suffix(&addr, &pat));
+    }
+
+    #[test]
+    fn test_check_suffix_odd() {
+        // Suffix "a0a" should match address ending in ...a0a
+        // hex "a0a" → trailing_nibble=0x0a, full_bytes=[0x0a]
+        // addr[18] low nibble = 'a', addr[19] = 0x0a = "0a"
+        let mut addr = [0u8; 20];
+        addr[18] = 0xfa; // low nibble = 0x0a = 'a'
+        addr[19] = 0x0a; // full byte = 0x0a = '0a'
+        let pat = RawPattern::from_hex_suffix("a0a").unwrap();
+        assert!(check_suffix(&addr, &pat));
+
+        // Should NOT match ...aa0
+        let mut addr2 = [0u8; 20];
+        addr2[18] = 0x0a;
+        addr2[19] = 0xa0;
+        assert!(!check_suffix(&addr2, &pat));
     }
 
     #[test]

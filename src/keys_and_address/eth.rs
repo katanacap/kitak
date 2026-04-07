@@ -128,9 +128,17 @@ impl EthereumKeyPair {
     pub(crate) fn from_raw_parts(
         private_key: SecretKey,
         public_key: PublicKey,
-        keccak_hash: &[u8],
+        search_hash: &[u8],
     ) -> Self {
-        let address = encode(&keccak_hash[12..]);
+        // Recompute address from secp256k1 public key to guarantee consistency
+        let pk_bytes = public_key.serialize_uncompressed();
+        let hash = Keccak256::digest(&pk_bytes[1..]);
+        debug_assert_eq!(
+            &hash[12..],
+            &search_hash[12..],
+            "SIMD keccak hash mismatch — search found wrong key"
+        );
+        let address = encode(&hash[12..]);
         EthereumKeyPair {
             private_key,
             public_key,

@@ -95,16 +95,21 @@ impl KeyPairGenerator for BitcoinKeyPair {
 
         // Phase 3: Convert to Bitcoin types and compute addresses
         for (i, slot) in batch_array.iter_mut().enumerate() {
-            // Compressed pubkey from k256 affine point
             let compressed = affine[i].to_encoded_point(true);
-            let secp_pk = bitcoin::secp256k1::PublicKey::from_slice(compressed.as_bytes()).unwrap();
+            // Skip identity point (astronomically unlikely but prevents panic)
+            let Ok(secp_pk) = bitcoin::secp256k1::PublicKey::from_slice(compressed.as_bytes())
+            else {
+                continue;
+            };
             slot.public_key = PublicKey::new(secp_pk);
 
             // Secret key from scalar
             let offset = K256Scalar::from(i as u64);
             let secret_scalar = start_scalar + offset;
             let sk_bytes = secret_scalar.to_bytes();
-            let secp_sk = bitcoin::secp256k1::SecretKey::from_slice(&sk_bytes).unwrap();
+            let Ok(secp_sk) = bitcoin::secp256k1::SecretKey::from_slice(&sk_bytes) else {
+                continue;
+            };
             slot.private_key = PrivateKey::new(secp_sk, Bitcoin);
 
             // Reuse String buffer for address
