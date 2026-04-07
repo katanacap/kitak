@@ -1,13 +1,16 @@
 //! # Solana Key Pair and Address Generation
 //!
 //! This module provides functionality to generate Solana key pairs and their associated addresses.
+//! Uses `ed25519-dalek` directly instead of the heavy `solana-sdk`.
 
+use std::cell::RefCell;
+
+use crate::BATCH_SIZE;
 use crate::keys_and_address::{KeyPairGenerator, SolanaKeyPair};
 
-use rand::{Rng, rngs::ThreadRng};
-use solana_sdk::bs58;
-use solana_sdk::signature::{Keypair, SeedDerivable, Signer};
-use std::cell::RefCell;
+use ed25519_dalek::SigningKey;
+use rand::Rng;
+use rand::rngs::ThreadRng;
 
 thread_local! {
     static THREAD_LOCAL_RNG: RefCell<ThreadRng> = RefCell::new(rand::rng());
@@ -22,11 +25,15 @@ impl KeyPairGenerator for SolanaKeyPair {
     fn generate_random() -> Self {
         THREAD_LOCAL_RNG.with(|rng| {
             let mut seed = [0u8; 32];
-            rng.borrow_mut().fill_bytes(&mut seed); // Fill the seed with random bytes
-            let keypair = Keypair::from_seed(&seed).expect("Valid seed");
-            let address = keypair.pubkey().to_string();
+            rng.borrow_mut().fill_bytes(&mut seed);
+            let signing_key = SigningKey::from_bytes(&seed);
+            let verifying_key = signing_key.verifying_key();
+            let address = bs58::encode(verifying_key.as_bytes()).into_string();
 
-            SolanaKeyPair { keypair, address }
+            SolanaKeyPair {
+                signing_key,
+                address,
+            }
         })
     }
 
@@ -41,22 +48,53 @@ impl KeyPairGenerator for SolanaKeyPair {
     fn get_address_bytes(&self) -> &[u8] {
         self.address.as_bytes()
     }
+
+    /// Optimized batch fill for Solana keypairs.
+    ///
+    /// - Accesses thread-local RNG once per batch
+    /// - Reuses String buffers via `bs58::encode().onto()` (no intermediate allocation)
+    fn fill_batch(batch_array: &mut [Self; BATCH_SIZE]) {
+        THREAD_LOCAL_RNG.with(|rng| {
+            let mut rng = rng.borrow_mut();
+            let mut seed = [0u8; 32];
+
+            for slot in batch_array.iter_mut() {
+                rng.fill_bytes(&mut seed);
+                let signing_key = SigningKey::from_bytes(&seed);
+                let verifying_key = signing_key.verifying_key();
+
+                // Reuse existing String buffer — bs58::encode().onto() writes directly
+                slot.address.clear();
+                let _ = bs58::encode(verifying_key.as_bytes()).onto(&mut slot.address);
+
+                slot.signing_key = signing_key;
+            }
+        });
+    }
 }
 
 impl SolanaKeyPair {
-    /// Retrieves the key pair as a `solana_sdk::signature::Keypair` reference.
-    pub fn keypair(&self) -> &Keypair {
-        &self.keypair
+    /// Retrieves the signing key reference.
+    pub fn signing_key(&self) -> &SigningKey {
+        &self.signing_key
     }
 
-    /// Retrieves the private key in Base58 encoding as a `String`.
+    /// Retrieves the private key (seed) in Base58 encoding as a `String`.
     pub fn get_private_key_as_base58(&self) -> String {
-        bs58::encode(self.keypair.secret_bytes()).into_string()
+        bs58::encode(self.signing_key.as_bytes()).into_string()
     }
 
     /// Retrieves the public key in Base58 encoding as `String` reference.
     pub fn get_public_key_as_base58(&self) -> &String {
         &self.address
+    }
+
+    /// Retrieves the full keypair bytes (64 bytes: secret + public) for compatibility.
+    pub fn get_keypair_bytes(&self) -> [u8; 64] {
+        let mut bytes = [0u8; 64];
+        bytes[..32].copy_from_slice(self.signing_key.as_bytes());
+        bytes[32..].copy_from_slice(self.signing_key.verifying_key().as_bytes());
+        bytes
     }
 }
 
@@ -64,46 +102,37 @@ impl SolanaKeyPair {
 mod tests {
     use super::*;
 
-    use bs58;
-    use solana_sdk::signature::Signer;
-
     #[test]
     fn test_generate_random() {
-        // Generate a random Solana key pair
         let key_pair = SolanaKeyPair::generate_random();
 
-        // Ensure the public key is derived correctly
-        let derived_public_key = key_pair.keypair.pubkey();
-        assert_eq!(key_pair.keypair.pubkey(), derived_public_key);
-
         // Ensure the address matches the public key
-        let address = key_pair.get_address();
-        assert_eq!(address, &derived_public_key.to_string());
+        let expected_address =
+            bs58::encode(key_pair.signing_key.verifying_key().as_bytes()).into_string();
+        assert_eq!(*key_pair.get_address(), expected_address);
     }
 
     #[test]
     fn test_get_private_key_as_base58() {
         let key_pair = SolanaKeyPair::generate_random();
-        let private_key_base58 = bs58::encode(key_pair.keypair.secret_bytes()).into_string();
-
+        let private_key_base58 = bs58::encode(key_pair.signing_key.as_bytes()).into_string();
         assert_eq!(key_pair.get_private_key_as_base58(), private_key_base58);
     }
 
     #[test]
     fn test_get_public_key_as_base58() {
         let key_pair = SolanaKeyPair::generate_random();
-        let public_key_base58 = key_pair.keypair.pubkey().to_string();
-
+        let public_key_base58 =
+            bs58::encode(key_pair.signing_key.verifying_key().as_bytes()).into_string();
         assert_eq!(*key_pair.get_public_key_as_base58(), public_key_base58);
     }
 
     #[test]
     fn test_unique_keypairs() {
-        // Generate multiple key pairs and ensure they are unique
         let key_pair_1 = SolanaKeyPair::generate_random();
         let key_pair_2 = SolanaKeyPair::generate_random();
 
-        assert_ne!(key_pair_1.keypair.pubkey(), key_pair_2.keypair.pubkey());
+        assert_ne!(key_pair_1.get_address(), key_pair_2.get_address());
         assert_ne!(
             key_pair_1.get_private_key_as_base58(),
             key_pair_2.get_private_key_as_base58()

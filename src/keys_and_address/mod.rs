@@ -14,10 +14,10 @@ use std::array::from_fn;
 use crate::BATCH_SIZE;
 
 use bitcoin::{PrivateKey, PublicKey};
+#[cfg(feature = "solana")]
+use ed25519_dalek::SigningKey;
 #[cfg(feature = "ethereum")]
 use secp256k1::{PublicKey as SecpPublicKey, SecretKey};
-#[cfg(feature = "solana")]
-use solana_sdk::signature::Keypair;
 
 /// A trait to handle generic key pair and address creation.
 /// Used in vanity address generation.
@@ -91,9 +91,9 @@ unsafe impl Send for EthereumKeyPair {}
 /// Implements `KeyPairGenerator` and `Send` traits.
 #[cfg(feature = "solana")]
 pub struct SolanaKeyPair {
-    /// A Solana `solana_sdk::signer::Keypair` struct.
-    keypair: Keypair,
-    /// The Solana address as a `String`.
+    /// Ed25519 signing key.
+    signing_key: SigningKey,
+    /// The Solana address as a `String` (Base58-encoded public key).
     address: String,
 }
 

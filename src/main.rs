@@ -15,8 +15,6 @@ use kitak::keys_and_address::BitcoinKeyPair;
 use kitak::vanity_addr_generator::chain::Chain;
 use kitak::vanity_addr_generator::vanity_addr::{VanityAddr, VanityMode};
 
-#[cfg(feature = "solana")]
-use bitcoin::hex::DisplayHex;
 use clap::error::ErrorKind;
 use std::path::Path;
 use std::process;
@@ -143,13 +141,10 @@ fn generate_vanity_address(pattern: &str, vanity_flags: &VanityFlags) -> Result<
             // 2) Format on success
             match result {
                 Ok(res) => {
-                    // Keypair -> hex
-                    let keypair_bytes = res.keypair().to_bytes();
-                    let private_key_hex = keypair_bytes.as_hex();
-
+                    let private_key_b58 = res.get_private_key_as_base58();
                     let address = res.get_address();
                     let s = format!(
-                        "private_key (hex): {private_key_hex}\n\
+                        "private_key (base58): {private_key_b58}\n\
                          address: {address}\n\n"
                     );
                     Ok(s)

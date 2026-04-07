@@ -12,7 +12,10 @@ use bitcoin::Address;
 use bitcoin::Network::Bitcoin;
 use bitcoin::key::rand::rngs::ThreadRng;
 use bitcoin::key::{PrivateKey, PublicKey};
-use bitcoin::secp256k1::{All, Scalar, Secp256k1, rand};
+use bitcoin::secp256k1::{All, Secp256k1, rand};
+
+#[cfg(feature = "ethereum")]
+use k256::elliptic_curve::sec1::ToEncodedPoint;
 
 thread_local! {
     static THREAD_LOCAL_SECP256K1: Secp256k1<All> = Secp256k1::new();
@@ -55,19 +58,70 @@ impl KeyPairGenerator for BitcoinKeyPair {
         self.comp_address.as_bytes()
     }
 
-    /// Optimized batch fill using incremental EC point addition.
+    /// Optimized batch fill using k256 Montgomery batch inversion.
     ///
-    /// Instead of generating a fresh random keypair for each slot (which requires
-    /// a full scalar multiplication `k * G` each time), this method:
-    /// 1. Generates ONE random keypair via full scalar multiplication.
-    /// 2. For subsequent slots, increments the secret key by 1 and adds the
-    ///    generator point G to the public key — a simple EC point addition
-    ///    that is ~30-60x faster than full scalar multiplication.
-    /// 3. Reuses existing String buffers (clear + write) to avoid heap
-    ///    allocation/deallocation per keypair.
-    /// 4. Accesses thread-local secp256k1 context and RNG once per batch
-    ///    instead of once per keypair.
+    /// Accumulates 256 points in projective (Jacobian) coordinates with NO
+    /// modular inversions, then does ONE batch inversion for all 256 points.
+    /// Falls back to incremental secp256k1 approach when ethereum feature is disabled.
+    #[cfg(feature = "ethereum")]
     fn fill_batch(batch_array: &mut [Self; BATCH_SIZE]) {
+        use k256::{AffinePoint, ProjectivePoint, Scalar as K256Scalar};
+
+        let g = ProjectivePoint::GENERATOR;
+
+        // Use bitcoin's re-exported rand (0.8) for RNG
+        let mut scalar_bytes = [0u8; 32];
+        THREAD_LOCAL_RNG.with(|rng| {
+            use bitcoin::secp256k1::rand::RngCore;
+            rng.borrow_mut().fill_bytes(&mut scalar_bytes);
+        });
+        let start_scalar =
+            <K256Scalar as k256::elliptic_curve::ops::Reduce<k256::U256>>::reduce_bytes(
+                &k256::elliptic_curve::generic_array::GenericArray::from(scalar_bytes),
+            );
+        let start_point = ProjectivePoint::GENERATOR * start_scalar;
+
+        // Phase 1: Generate projective points (NO inversions)
+        let mut projective = [ProjectivePoint::IDENTITY; BATCH_SIZE];
+        let mut affine = [AffinePoint::IDENTITY; BATCH_SIZE];
+        let mut current = start_point;
+        for slot in projective.iter_mut() {
+            *slot = current;
+            current += g;
+        }
+
+        // Phase 2: ONE Montgomery batch inversion
+        k256::elliptic_curve::group::Curve::batch_normalize(&projective, &mut affine);
+
+        // Phase 3: Convert to Bitcoin types and compute addresses
+        for (i, slot) in batch_array.iter_mut().enumerate() {
+            // Compressed pubkey from k256 affine point
+            let compressed = affine[i].to_encoded_point(true);
+            let secp_pk = bitcoin::secp256k1::PublicKey::from_slice(compressed.as_bytes()).unwrap();
+            slot.public_key = PublicKey::new(secp_pk);
+
+            // Secret key from scalar
+            let offset = K256Scalar::from(i as u64);
+            let secret_scalar = start_scalar + offset;
+            let sk_bytes = secret_scalar.to_bytes();
+            let secp_sk = bitcoin::secp256k1::SecretKey::from_slice(sk_bytes.as_slice()).unwrap();
+            slot.private_key = PrivateKey::new(secp_sk, Bitcoin);
+
+            // Reuse String buffer for address
+            slot.comp_address.clear();
+            let _ = write!(
+                slot.comp_address,
+                "{}",
+                Address::p2pkh(slot.public_key, Bitcoin)
+            );
+        }
+    }
+
+    /// Fallback fill_batch when k256 is not available (no ethereum feature).
+    #[cfg(not(feature = "ethereum"))]
+    fn fill_batch(batch_array: &mut [Self; BATCH_SIZE]) {
+        use bitcoin::secp256k1::Scalar;
+
         THREAD_LOCAL_SECP256K1.with(|secp256k1| {
             THREAD_LOCAL_RNG.with(|rng| {
                 let mut rng = rng.borrow_mut();
@@ -77,7 +131,6 @@ impl KeyPairGenerator for BitcoinKeyPair {
                     slot.private_key = PrivateKey::new(secret_key, Bitcoin);
                     slot.public_key = PublicKey::new(pk);
 
-                    // Reuse existing String buffer
                     slot.comp_address.clear();
                     let _ = write!(
                         slot.comp_address,
@@ -85,26 +138,19 @@ impl KeyPairGenerator for BitcoinKeyPair {
                         Address::p2pkh(slot.public_key, Bitcoin)
                     );
 
-                    // Increment: secret_key += 1, public_key += G
-                    // This is ~30-60x faster than a full generate_keypair()
                     match secret_key.add_tweak(&Scalar::ONE) {
-                        Ok(new_sk) => {
-                            // add_exp_tweak(ONE) computes P + 1*G = P + G (point addition)
-                            match pk.add_exp_tweak(secp256k1, &Scalar::ONE) {
-                                Ok(new_pk) => {
-                                    secret_key = new_sk;
-                                    pk = new_pk;
-                                }
-                                Err(_) => {
-                                    // Point at infinity (astronomically unlikely)
-                                    let (sk, p) = secp256k1.generate_keypair(&mut *rng);
-                                    secret_key = sk;
-                                    pk = p;
-                                }
+                        Ok(new_sk) => match pk.add_exp_tweak(secp256k1, &Scalar::ONE) {
+                            Ok(new_pk) => {
+                                secret_key = new_sk;
+                                pk = new_pk;
                             }
-                        }
+                            Err(_) => {
+                                let (sk, p) = secp256k1.generate_keypair(&mut *rng);
+                                secret_key = sk;
+                                pk = p;
+                            }
+                        },
                         Err(_) => {
-                            // Wrapped around curve order (astronomically unlikely)
                             let (sk, p) = secp256k1.generate_keypair(&mut *rng);
                             secret_key = sk;
                             pk = p;

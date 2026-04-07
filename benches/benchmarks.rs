@@ -4,6 +4,8 @@ use criterion::{Criterion, criterion_group, criterion_main};
 
 #[cfg(feature = "ethereum")]
 use kitak::EthereumKeyPair;
+#[cfg(feature = "solana")]
+use kitak::SolanaKeyPair;
 use kitak::keys_and_address::BitcoinKeyPair;
 use kitak::vanity_addr_generator::comp::{
     contains_case_insensitive, contains_memx, eq_prefix_case_insensitive, eq_prefix_memx,
@@ -67,6 +69,38 @@ fn bench_eth_fill_batch(c: &mut Criterion) {
     c.bench_function("eth_fill_batch", |b| {
         b.iter(|| {
             EthereumKeyPair::fill_batch(&mut batch);
+            black_box(&batch);
+        })
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Solana keypair generation benchmarks
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "solana")]
+fn bench_sol_generate_random(c: &mut Criterion) {
+    c.bench_function("sol_generate_random", |b| {
+        b.iter(|| black_box(SolanaKeyPair::generate_random()))
+    });
+}
+
+#[cfg(feature = "solana")]
+fn bench_sol_generate_batch(c: &mut Criterion) {
+    c.bench_function("sol_generate_batch", |b| {
+        b.iter(|| {
+            let batch: [SolanaKeyPair; BATCH_SIZE] = SolanaKeyPair::generate_batch();
+            black_box(batch);
+        })
+    });
+}
+
+#[cfg(feature = "solana")]
+fn bench_sol_fill_batch(c: &mut Criterion) {
+    let mut batch: [SolanaKeyPair; BATCH_SIZE] = SolanaKeyPair::generate_batch();
+    c.bench_function("sol_fill_batch", |b| {
+        b.iter(|| {
+            SolanaKeyPair::fill_batch(&mut batch);
             black_box(&batch);
         })
     });
@@ -246,7 +280,7 @@ fn bench_vanity_eth_metal(c: &mut Criterion) {
 // Groups
 // ---------------------------------------------------------------------------
 
-#[cfg(not(feature = "ethereum"))]
+#[cfg(not(any(feature = "ethereum", feature = "solana")))]
 criterion_group!(
     keygen,
     bench_btc_generate_random,
@@ -254,7 +288,7 @@ criterion_group!(
     bench_btc_fill_batch,
 );
 
-#[cfg(feature = "ethereum")]
+#[cfg(all(feature = "ethereum", not(feature = "solana")))]
 criterion_group!(
     keygen,
     bench_btc_generate_random,
@@ -263,6 +297,31 @@ criterion_group!(
     bench_eth_generate_random,
     bench_eth_generate_batch,
     bench_eth_fill_batch,
+);
+
+#[cfg(all(feature = "solana", not(feature = "ethereum")))]
+criterion_group!(
+    keygen,
+    bench_btc_generate_random,
+    bench_btc_generate_batch,
+    bench_btc_fill_batch,
+    bench_sol_generate_random,
+    bench_sol_generate_batch,
+    bench_sol_fill_batch,
+);
+
+#[cfg(all(feature = "ethereum", feature = "solana"))]
+criterion_group!(
+    keygen,
+    bench_btc_generate_random,
+    bench_btc_generate_batch,
+    bench_btc_fill_batch,
+    bench_eth_generate_random,
+    bench_eth_generate_batch,
+    bench_eth_fill_batch,
+    bench_sol_generate_random,
+    bench_sol_generate_batch,
+    bench_sol_fill_batch,
 );
 
 criterion_group!(
