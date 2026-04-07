@@ -1,7 +1,16 @@
-<h1 align="center">kitak</h1>
+<p align="center">
+<pre align="center">
+  ██╗  ██╗██╗████████╗ █████╗ ██╗  ██╗
+  ██║ ██╔╝██║╚══██╔══╝██╔══██╗██║ ██╔╝
+  █████╔╝ ██║   ██║   ███████║█████╔╝
+  ██╔═██╗ ██║   ██║   ██╔══██║██╔═██╗
+  ██║  ██╗██║   ██║   ██║  ██║██║  ██╗
+  ╚═╝  ╚═╝╚═╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝
+</pre>
+</p>
 
 <p align="center">
-  <strong>Vanity address generator for Ethereum, Bitcoin, and Solana</strong><br>
+  <strong>Vanity address generator for ETH · BTC · SOL</strong><br>
   <em>Find your perfect wallet address — fast.</em>
 </p>
 
@@ -12,14 +21,18 @@
 kitak generates crypto wallet keypairs where the address matches a pattern you choose. Want an Ethereum address that starts with `0xdead`? Or one that starts AND ends with `1111`? kitak finds the private key for it.
 
 ```
-$ kitak --eth -p 1111 --suffix-pattern 1111 -t 6
+$ kitak -p 1111 -s 1111 -t 6
 
-[42.8s] prefix '1111' + suffix '1111' | checked: 0.27B | speed: 6.35M keys/s
-FOUND IN 42.8 SECONDS!
+  ━━━ kitak v3.1.1 ━━━
 
-private_key (hex): 0x4a7f...c9d2
-public_key (hex):  0x04e3a1...
-address:           0x11119da4e7c2b053f8a4b6d8e2f17ca930e41111
+  ETH  prefix 1111 ... 1111  (6 threads)
+
+  00:42  0x1111a8F3e29C4b...9c2E1111    270.4M  6.4M/s
+
+  ✓ FOUND in 42.8s  (270.4M checked, 6.3M/s)
+
+  address:      0x11119da4e7c2b053f8a4b6d8e2f17ca930e41111
+  private_key:  0x4a7f...c9d2
 ```
 
 ## Why kitak?
@@ -27,16 +40,14 @@ address:           0x11119da4e7c2b053f8a4b6d8e2f17ca930e41111
 |  | kitak | typical vanity gen |
 |--|-------|-------------------|
 | ETH speed (6 threads) | **6.5M keys/sec** | ~0.3M keys/sec |
-| Prefix + suffix search | single pass | regex (slow) |
-| Chains | BTC + ETH + SOL | usually one |
+| Prefix + suffix search | `-p dead -s beef` | regex only (slow) |
+| Chains | ETH + BTC + SOL | usually one |
 | SIMD acceleration | NEON on Apple Silicon | none |
 
 ### How it's fast
 
-kitak doesn't just brute-force harder — it eliminates unnecessary work:
-
-1. **No hex encoding in the hot loop** — patterns are compared directly against raw Keccak hash bytes
-2. **Montgomery batch inversion** — 1 modular inversion for 256 keys instead of 256 (applies to ETH and BTC)
+1. **No hex encoding in the hot loop** — patterns compared directly against raw Keccak hash bytes
+2. **Montgomery batch inversion** — 1 modular inversion for 256 keys instead of 256 (ETH and BTC)
 3. **Incremental keys** (P += G) — EC point addition is ~50x cheaper than full scalar multiplication
 4. **2-way NEON Keccak** — hashes 2 keys per pass on ARM with compile-time constant rotations
 5. **jemalloc** — optimized allocator for multi-threaded workloads
@@ -44,20 +55,23 @@ kitak doesn't just brute-force harder — it eliminates unnecessary work:
 ## Quick start
 
 ```bash
-# Install
+# Install (all chains included by default)
 cargo install kitak
 
-# Find an ETH address starting with "dead"
-kitak --eth -p dead
+# ETH prefix
+kitak -p dead
 
-# Starting with "1111" AND ending with "1111"
-kitak --eth -p 1111 --suffix-pattern 1111 -t 8
+# ETH prefix + suffix
+kitak -p 1111 -s 1111 -t 8
 
-# Bitcoin address with "test" anywhere (case-sensitive)
-kitak --btc -a -c test
+# ETH suffix only
+kitak -s beef
 
-# Solana address ending with "123"
-kitak --sol -s 123
+# BTC containing 'test'
+kitak --btc -a test
+
+# SOL suffix
+kitak --sol -s abc
 ```
 
 ## Installation
@@ -94,11 +108,13 @@ kitak [OPTIONS] <PATTERN>
 
 | Flag | Description | Example |
 |------|-------------|---------|
-| `-p, --prefix` | Starts with (default) | `kitak --eth -p dead` |
-| `-s, --suffix` | Ends with | `kitak --eth -s beef` |
+| `-p, --prefix` | Starts with (default) | `kitak -p dead` |
+| `-s, --suffix` | Suffix pattern | `kitak -s beef` |
+| `-p` + `-s` | Prefix AND suffix | `kitak -p aa -s bb` |
 | `-a, --anywhere` | Contains | `kitak --btc -a cafe` |
 | `-r, --regex` | Regex | `kitak --btc -r "^1E.*T$"` |
-| `--suffix-pattern` | Prefix AND suffix | `kitak --eth -p aa --suffix-pattern bb` |
+
+`-s` is smart: alone it's suffix-only mode, with `-p` it searches both simultaneously.
 
 ### Options
 
@@ -106,7 +122,6 @@ kitak [OPTIONS] <PATTERN>
 |------|-------------|---------|
 | `-t, --threads <N>` | Worker threads | 8 |
 | `-c, --case-sensitive` | Exact case matching | off |
-| `-d, --disable-fast` | Allow longer patterns | off |
 | `-i, --input-file <FILE>` | Batch patterns from file | — |
 | `-o, --output-file <FILE>` | Save results to file | — |
 | `-f, --force-flags` | CLI flags override file flags | off |
@@ -136,7 +151,7 @@ kitak -i patterns.txt -o wallets.txt
 `patterns.txt`:
 ```
 dead -p --eth
-cafe -a -c --btc
+cafe -a --btc
 abc -s --sol
 ```
 
@@ -176,7 +191,7 @@ println!("0x{}", kp.get_address());
 ## Benchmarks
 
 ```bash
-cargo bench --features all
+cargo bench
 ```
 
 Apple Silicon, `fill_batch` (256 keys per batch):
