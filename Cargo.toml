@@ -1,0 +1,58 @@
+[package]
+name = "kitak"
+version = "3.0.0"
+authors = ["Emirhan TALA <tala.emirhan@gmail.com>", "kio <kio@katana.capital>"]
+description = "A blazingly fast Bitcoin, Ethereum, and Solana vanity address generator."
+edition = "2021"
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/katanacap/kitak"
+documentation = "https://docs.rs/kitak/latest/kitak/index.html"
+keywords = ["bitcoin", "ethereum", "solana", "vanity", "address"]
+
+[dependencies]
+rand = "0.10.0"
+bitcoin = { version = "0.32.5", features = ["rand-std"] }
+thiserror = "2.0.11"
+clap = "4.5.26"
+num-traits = "0.2.19"
+regex = "1.11.1"
+memx = "0.2.0"
+tikv-jemallocator = "0.6"
+
+# Dependencies for Ethereum support
+hex = { version = "0.4.3", optional = true }
+secp256k1 = { version = "0.31.1", features = ["rand"], optional = true }
+sha3 = { version = "0.11.0-pre.4", optional = true }
+k256 = { version = "0.13", optional = true }
+tiny-keccak = { version = "2.0", features = ["keccak"], optional = true }
+metal = { version = "0.33", optional = true }
+
+# Dependencies for Solana support
+solana-sdk = { version = "4.0.1", default-features = false, features = ["full"], optional = true }
+openssl = { version = "0.10", features = ["vendored"], optional = true }
+aho-corasick = "1.1.3"
+
+[features]
+default = []
+
+ethereum = ["hex", "secp256k1", "sha3", "k256", "tiny-keccak"]
+metal-gpu = ["ethereum", "metal"]
+solana = ["solana-sdk", "openssl"]
+all = ["solana", "ethereum"]
+
+[dev-dependencies]
+tempfile = "3.6"
+criterion = { version = "0.8.2", features = ["html_reports"] }
+
+[[bench]]
+name = "benchmarks"
+harness = false
+
+[profile.test]
+opt-level = 3
+
+# The profile that 'cargo dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

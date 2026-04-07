@@ -1,0 +1,70 @@
+name: Rust
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check formatting
+        run: cargo fmt --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Clippy (ethereum)
+        run: cargo clippy --features ethereum -- -D warnings
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        features: ["", "ethereum"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: cargo build --verbose ${{ matrix.features && format('--features {0}', matrix.features) || '' }}
+      - name: Test
+        run: cargo test --verbose ${{ matrix.features && format('--features {0}', matrix.features) || '' }}
+
+  test-solana:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+      - name: Build (solana)
+        run: cargo build --verbose --features solana
+      - name: Test (solana)
+        run: cargo test --verbose --features solana
+
+  test-all:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+      - name: Build (all)
+        run: cargo build --verbose --features all
+      - name: Test (all)
+        run: cargo test --verbose --features all
+      - name: Doc tests
+        run: cargo test --doc --features all
+
+  test-metal:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (metal-gpu)
+        run: cargo build --verbose --features metal-gpu
+      - name: Test (metal-gpu)
+        run: cargo test --verbose --features metal-gpu
