@@ -1,7 +1,7 @@
 <h1 align="center">kitak</h1>
 
 <p align="center">
-  <strong>Vanity address generator for ETH · BTC · SOL</strong><br>
+  <strong>Vanity address generator for Ethereum · Bitcoin · Solana</strong><br>
   <em>Find your perfect wallet address — fast.</em>
 </p>
 
@@ -67,19 +67,28 @@ kitak --sol -s abc
 
 ## Installation
 
+### Homebrew (macOS)
+
+```bash
+brew tap katanacap/tap
+brew install kitak
+```
+
+### Cargo
+
 ```bash
 cargo install kitak
 ```
 
-All chains (Bitcoin, Ethereum, Solana) are included by default.
-
-Build from source:
+### From source
 
 ```bash
 git clone https://github.com/katanacap/kitak.git
 cd kitak
 cargo build --release
 ```
+
+All chains (Bitcoin, Ethereum, Solana) are included by default.
 
 ## CLI reference
 
