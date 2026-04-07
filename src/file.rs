@@ -74,14 +74,25 @@ fn parse_line(line: &str) -> Option<FileLineItem> {
         None
     };
 
+    // suffix pattern: -s VALUE or --suffix VALUE
+    let mut suffix_pattern: Option<String> = None;
+    for (i, &flag) in flags_vec.iter().enumerate() {
+        if (flag == "-s" || flag == "--suffix")
+            && let Some(next_val) = flags_vec.get(i + 1)
+        {
+            suffix_pattern = Some(next_val.to_string());
+        }
+    }
+
     // vanity mode
+    let has_prefix = flags_vec.contains(&"-p") || flags_vec.contains(&"--prefix");
     let vanity_mode = if flags_vec.contains(&"-r") || flags_vec.contains(&"--regex") {
         Some(VanityMode::Regex)
     } else if flags_vec.contains(&"-a") || flags_vec.contains(&"--anywhere") {
         Some(VanityMode::Anywhere)
-    } else if flags_vec.contains(&"-s") || flags_vec.contains(&"--suffix") {
+    } else if suffix_pattern.is_some() && !has_prefix {
         Some(VanityMode::Suffix)
-    } else if flags_vec.contains(&"-p") || flags_vec.contains(&"--prefix") {
+    } else if has_prefix || suffix_pattern.is_some() {
         Some(VanityMode::Prefix)
     } else {
         None
@@ -107,7 +118,7 @@ fn parse_line(line: &str) -> Option<FileLineItem> {
             vanity_mode,
             chain,
             threads: 0,
-            suffix_pattern: None,
+            suffix_pattern,
         },
     })
 }
@@ -243,11 +254,10 @@ mod tests {
     #[test]
     fn test_parse_input_file_with_valid_lines() {
         // Mock file content
-        let file_content = "test -p\nexample -s\nanywhere -a";
+        let file_content = "test -p\nexample -s suf\nanywhere -a";
         let file_path = "test_valid_input.txt";
         std::fs::write(file_path, file_content).expect("Failed to create mock input file");
 
-        // Parse the file
         let result = parse_input_file(file_path);
         assert!(result.is_ok(), "Failed to parse valid input file");
 
@@ -257,8 +267,10 @@ mod tests {
         assert_eq!(items[0].pattern, "test");
         assert_eq!(items[0].flags.vanity_mode, Some(VanityMode::Prefix));
 
+        // -s without -p → suffix-only mode
         assert_eq!(items[1].pattern, "example");
         assert_eq!(items[1].flags.vanity_mode, Some(VanityMode::Suffix));
+        assert_eq!(items[1].flags.suffix_pattern, Some("suf".to_string()));
 
         assert_eq!(items[2].pattern, "anywhere");
         assert_eq!(items[2].flags.vanity_mode, Some(VanityMode::Anywhere));

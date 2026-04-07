@@ -82,21 +82,36 @@ use clap::{Arg, ArgAction, ArgGroup, Command};
 pub fn cli() -> Command {
     Command::new(env!("CARGO_PKG_NAME"))
         .version(env!("CARGO_PKG_VERSION"))
-        .about(env!("CARGO_PKG_DESCRIPTION"))
+        .about("\n\n\
+\x1b[36m\
+  ██╗  ██╗██╗████████╗ █████╗ ██╗  ██╗\n\
+  ██║ ██╔╝██║╚══██╔══╝██╔══██╗██║ ██╔╝\n\
+  █████╔╝ ██║   ██║   ███████║█████╔╝\n\
+  ██╔═██╗ ██║   ██║   ██╔══██║██╔═██╗\n\
+  ██║  ██╗██║   ██║   ██║  ██║██║  ██╗\n\
+  ╚═╝  ╚═╝╚═╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝\x1b[0m\n\n\
+  Vanity address generator for \x1b[33mETH\x1b[0m · \x1b[33mBTC\x1b[0m · \x1b[33mSOL\x1b[0m\n\n\
+\x1b[36mExamples:\x1b[0m\n  \
+  kitak -p dead                    \x1b[2m# ETH prefix 0xdead (default chain)\x1b[0m\n  \
+  kitak -p 1111 -s 1111 -t 8       \x1b[2m# ETH prefix + suffix combined\x1b[0m\n  \
+  kitak -s beef                    \x1b[2m# ETH suffix only\x1b[0m\n  \
+  kitak --btc -a test              \x1b[2m# BTC containing 'test'\x1b[0m\n  \
+  kitak --sol -s abc               \x1b[2m# SOL ending with 'abc'\x1b[0m\n  \
+  kitak --btc -r \"^1E.*T$\"          \x1b[2m# BTC regex match\x1b[0m")
         .next_line_help(true)
         .arg(
             Arg::new("bitcoin")
                 .long("btc")
                 .action(ArgAction::SetTrue)
                 .conflicts_with_all(["ethereum", "solana"])
-                .help("Generates Bitcoin keypairs and addresses. [default]")
+                .help("Generates Bitcoin keypairs and addresses.")
         )
         .arg(
             Arg::new("ethereum")
                 .long("eth")
                 .action(ArgAction::SetTrue)
                 .conflicts_with_all(["bitcoin", "solana", "case-sensitive"])
-                .help("Generates Ethereum keypairs and addresses.")
+                .help("Generates Ethereum keypairs and addresses. [default]")
         )
         .arg(
             Arg::new("solana")
@@ -108,8 +123,8 @@ pub fn cli() -> Command {
         .arg(
             Arg::new("string")
                 .index(1)
-                .required_unless_present_any(["input-file"])
-                .help("The string (or regex) used to match Bitcoin vanity addresses."),
+                .required_unless_present_any(["input-file", "suffix"])
+                .help("The string (or regex) used to match vanity addresses."),
         )
         .arg(
             Arg::new("input-file")
@@ -135,32 +150,31 @@ pub fn cli() -> Command {
         )
         .group(
             ArgGroup::new("pattern")
-                .args(["prefix", "suffix", "anywhere", "regex"])
-                .multiple(false) // Only one pattern type can be used
-                .required(false), // Not required globally
+                .args(["prefix", "anywhere", "regex"])
+                .multiple(false)
+                .required(false),
         )
         .arg(
             Arg::new("prefix")
                 .short('p')
                 .long("prefix")
                 .action(ArgAction::SetTrue)
-                .conflicts_with_all(["suffix", "anywhere", "regex"])
+                .conflicts_with_all(["anywhere", "regex"])
                 .help("Matches the pattern as a prefix of the address. [default]"),
         )
         .arg(
             Arg::new("suffix")
                 .short('s')
                 .long("suffix")
-                .action(ArgAction::SetTrue)
-                .conflicts_with_all(["prefix", "anywhere", "regex"])
-                .help("Matches the pattern as a suffix of the address."),
+                .value_name("PATTERN")
+                .help("Suffix pattern. Alone: suffix-only mode. With -p: prefix + suffix combined."),
         )
         .arg(
             Arg::new("anywhere")
                 .short('a')
                 .long("anywhere")
                 .action(ArgAction::SetTrue)
-                .conflicts_with_all(["prefix", "suffix", "regex"])
+                .conflicts_with_all(["prefix", "regex"])
                 .help("Matches the pattern anywhere in the address."),
         )
         .arg(
@@ -168,8 +182,8 @@ pub fn cli() -> Command {
                 .short('r')
                 .long("regex")
                 .action(ArgAction::SetTrue)
-                .conflicts_with_all(["prefix", "suffix", "anywhere"])
-                .help("Matches addresses using a regex pattern, supporting advanced customization like anchors and wildcards."),
+                .conflicts_with_all(["prefix", "anywhere"])
+                .help("Matches addresses using a regex pattern."),
         )
         .arg(
             Arg::new("threads")
@@ -184,19 +198,6 @@ pub fn cli() -> Command {
                 .short('c')
                 .long("case-sensitive")
                 .action(ArgAction::SetTrue)
-                .help("Enables case-sensitive matching, making patterns distinguish between uppercase and lowercase characters."),
-        )
-        .arg(
-            Arg::new("disable-fast-mode")
-                .short('d')
-                .long("disable-fast")
-                .action(ArgAction::SetTrue)
-                .help("Disables fast mode to allow longer patterns (5 for BTC and SOL, 16 for ETH), though it may increase search time."),
-        )
-        .arg(
-            Arg::new("suffix-pattern")
-                .long("suffix-pattern")
-                .value_name("PATTERN")
-                .help("Combined with --prefix, matches both prefix and suffix simultaneously. Uses optimized raw byte matching for Ethereum."),
+                .help("Enables case-sensitive matching."),
         )
 }

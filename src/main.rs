@@ -26,7 +26,7 @@ fn generate_vanity_address(pattern: &str, vanity_flags: &VanityFlags) -> Result<
     let start = Instant::now();
 
     // "Inline" everything in each arm so we get a single `Result<String, String>`
-    let out = match vanity_flags.chain.unwrap_or(Chain::Bitcoin) {
+    let out = match vanity_flags.chain.unwrap_or(Chain::Ethereum) {
         Chain::Bitcoin => {
             // 1) Generate the Bitcoin vanity
             let result: Result<BitcoinKeyPair, VanityError> =
@@ -43,16 +43,15 @@ fn generate_vanity_address(pattern: &str, vanity_flags: &VanityFlags) -> Result<
                     ),
                 };
 
-            // 2) Format the result on success
             match result {
                 Ok(res) => {
                     let s = format!(
-                        "private_key (wif): {}\n\
-                         public_key (compressed): {}\n\
-                         address (compressed): {}\n\n",
+                        "  \x1b[1maddress:\x1b[0m      \x1b[32m{}\x1b[0m\n\
+                         \x1b[1m  private_key:\x1b[0m  {}\n\
+                         \x1b[1m  public_key:\x1b[0m   {}\n",
+                        res.get_comp_address(),
                         res.get_wif_private_key(),
                         res.get_comp_public_key(),
-                        res.get_comp_address()
                     );
                     Ok(s)
                 }
@@ -65,32 +64,28 @@ fn generate_vanity_address(pattern: &str, vanity_flags: &VanityFlags) -> Result<
             let mode = vanity_flags.vanity_mode.unwrap_or(VanityMode::Prefix);
             let suffix_pat = vanity_flags.suffix_pattern.as_deref().unwrap_or("");
 
-            // Use the optimized raw byte fast path for prefix/suffix modes
             let result: Result<EthereumKeyPair, VanityError> = match mode {
                 VanityMode::Regex => {
                     VanityAddr::generate_regex::<EthereumKeyPair>(pattern, vanity_flags.threads)
                 }
-                VanityMode::Prefix if !suffix_pat.is_empty() => {
-                    // Combined prefix + suffix: use fast path
+                VanityMode::Prefix => {
+                    // Prefix (+ optional suffix): fast path
                     kitak::vanity_addr_generator::eth_search::find_eth_vanity_raw(
                         pattern,
                         suffix_pat,
                         vanity_flags.threads,
                     )
                 }
-                VanityMode::Prefix => {
-                    // Prefix only: use fast path
-                    kitak::vanity_addr_generator::eth_search::find_eth_vanity_raw(
-                        pattern,
-                        "",
-                        vanity_flags.threads,
-                    )
-                }
                 VanityMode::Suffix => {
-                    // Suffix only: use fast path
+                    // Suffix only: -s without -p. Pattern comes from suffix_pattern.
+                    let suffix_val = if suffix_pat.is_empty() {
+                        pattern
+                    } else {
+                        suffix_pat
+                    };
                     kitak::vanity_addr_generator::eth_search::find_eth_vanity_raw(
                         "",
-                        pattern,
+                        suffix_val,
                         vanity_flags.threads,
                     )
                 }
@@ -111,9 +106,9 @@ fn generate_vanity_address(pattern: &str, vanity_flags: &VanityFlags) -> Result<
                     let address = res.get_address();
 
                     let s = format!(
-                        "private_key (hex): 0x{private_key_hex}\n\
-                         public_key (hex): 0x{pub_key_hex}\n\
-                         address: 0x{address}\n\n"
+                        "  \x1b[1maddress:\x1b[0m      \x1b[32m0x{address}\x1b[0m\n\
+                         \x1b[1m  private_key:\x1b[0m  0x{private_key_hex}\n\
+                         \x1b[1m  public_key:\x1b[0m   0x{pub_key_hex}\n"
                     );
                     Ok(s)
                 }
@@ -144,8 +139,8 @@ fn generate_vanity_address(pattern: &str, vanity_flags: &VanityFlags) -> Result<
                     let private_key_b58 = res.get_private_key_as_base58();
                     let address = res.get_address();
                     let s = format!(
-                        "private_key (base58): {private_key_b58}\n\
-                         address: {address}\n\n"
+                        "  \x1b[1maddress:\x1b[0m      \x1b[32m{address}\x1b[0m\n\
+                         \x1b[1m  private_key:\x1b[0m  {private_key_b58}\n"
                     );
                     Ok(s)
                 }
@@ -159,53 +154,62 @@ fn generate_vanity_address(pattern: &str, vanity_flags: &VanityFlags) -> Result<
         Chain::Solana => Err(VanityError::MissingFeatureSolana.to_string()),
     };
 
-    // If we made it here, we have out: Result<String, String>
     match out {
         Ok(s) => {
             let seconds = start.elapsed().as_secs_f64();
-            println!("FOUND IN {seconds:.4} SECONDS!\n");
+            eprintln!("  \x1b[32;1m✓ FOUND\x1b[0m in \x1b[33m{seconds:.2}s\x1b[0m\n");
             Ok(s)
         }
-        Err(e) => Err(format!("Skipping because of error: {e}\n\n")),
+        Err(e) => Err(format!("\x1b[31m✗\x1b[0m Skipping: {e}\n")),
     }
 }
 
 /// A single function to handle generating and printing/writing a vanity address
 /// for a given `pattern` + final `VanityFlags`.
 fn handle_item(pattern: &str, flags: &VanityFlags) {
-    // 1) Some fancy text decorations
-    // If `flags.vanity_mode` is None, we default to `VanityMode::Prefix`; up to you
     let vanity_mode = flags.vanity_mode.unwrap_or(VanityMode::Prefix);
 
-    // For the "case_sensitive_str":
-    let case_str = if flags.is_case_sensitive {
-        "(case sensitive)"
+    // For suffix-only mode with -s, the actual pattern is in suffix_pattern
+    let effective_pattern = if vanity_mode == VanityMode::Suffix && pattern.is_empty() {
+        flags.suffix_pattern.as_deref().unwrap_or("")
     } else {
-        "(case insensitive)"
+        pattern
     };
 
-    // Possibly you have a function like get_decoration_strings(...)
-    // We can replicate it inline:
-    let (vanity_mode_str, _case_sensitive_str) = match vanity_mode {
-        VanityMode::Prefix => ("has the prefix", case_str),
-        VanityMode::Suffix => ("has the suffix", case_str),
-        VanityMode::Anywhere => ("has the string", case_str),
-        VanityMode::Regex => ("matches regex", case_str),
+    let mode_str = match vanity_mode {
+        VanityMode::Prefix => "prefix",
+        VanityMode::Suffix => "suffix",
+        VanityMode::Anywhere => "contains",
+        VanityMode::Regex => "regex",
     };
 
-    // 2) Print the "initial search message"
-    // If chain is None, default to Bitcoin, or handle differently:
-    let chain = flags.chain.unwrap_or(Chain::Bitcoin);
-    println!(
-        "Searching key pair for {:?} chain where the address {}: '{}' {} with {} threads.\n",
-        chain, vanity_mode_str, pattern, case_str, flags.threads
+    let chain = flags.chain.unwrap_or(Chain::Ethereum);
+    let chain_str = match chain {
+        Chain::Bitcoin => "BTC",
+        Chain::Ethereum => "ETH",
+        Chain::Solana => "SOL",
+    };
+
+    // Compact pattern display
+    let suffix_str = flags.suffix_pattern.as_deref().unwrap_or("");
+    let pattern_display = if !suffix_str.is_empty() && vanity_mode == VanityMode::Prefix {
+        format!("{} ... {}", effective_pattern, suffix_str)
+    } else {
+        effective_pattern.to_string()
+    };
+
+    eprintln!(
+        "\n  \x1b[1;36m━━━ kitak v{} ━━━\x1b[0m\n",
+        env!("CARGO_PKG_VERSION")
+    );
+    eprintln!(
+        "  \x1b[90m{}\x1b[0m  \x1b[1m{}\x1b[0m \x1b[32m{}\x1b[0m  \x1b[90m({} threads)\x1b[0m",
+        chain_str, mode_str, pattern_display, flags.threads
     );
 
-    // 3) Build "buffer1"
-    let buffer1 = format!("Key pair whose address {vanity_mode_str}: '{pattern}' {case_str}\n");
+    let buffer1 = format!("{mode_str}: '{effective_pattern}'\n");
 
-    // 4) Actually generate the address
-    let result = generate_vanity_address(pattern, flags);
+    let result = generate_vanity_address(effective_pattern, flags);
 
     // 5) Format result or error, then handle output
     match result {

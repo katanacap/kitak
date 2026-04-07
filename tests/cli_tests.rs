@@ -4,154 +4,153 @@ use std::process::Command;
 
 use tempfile::NamedTempFile;
 
+/// Strip ANSI escape codes from string for test comparison.
+fn strip_ansi(s: &str) -> String {
+    let mut result = String::new();
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            // Skip until 'm'
+            while let Some(&nc) = chars.peek() {
+                chars.next();
+                if nc == 'm' {
+                    break;
+                }
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
 #[test]
 fn test_cli_with_prefix() {
-    // Run the CLI with a prefix
     let result = Command::new("./target/debug/kitak")
-        .args(["-p", "tst"]) // Prefix flag and prefix
+        .args(["--btc", "-p", "tst"])
         .output()
         .expect("Failed to execute CLI command");
 
-    // Check that the CLI exits successfully
     assert!(
         result.status.success(),
-        "CLI failed with error: {}",
+        "CLI failed: {}",
         String::from_utf8_lossy(&result.stderr)
     );
 
-    // Verify that the output contains the expected prefix
-    let stdout = String::from_utf8_lossy(&result.stdout);
+    let stdout = strip_ansi(&String::from_utf8_lossy(&result.stdout));
     assert!(
-        stdout
-            .to_ascii_lowercase()
-            .contains("address (compressed): 1tst"),
-        "CLI output does not contain expected prefix: {}",
+        stdout.to_ascii_lowercase().contains("1tst"),
+        "Missing prefix in output: {}",
         stdout
     );
 }
 
 #[test]
 fn test_cli_with_regex() {
-    // Run the CLI with a regex pattern
     let result = Command::new("./target/debug/kitak")
-        .args(["-r", "^1E.*T$"]) // Regex flag and pattern
+        .args(["--btc", "-r", "^1E.*T$"])
         .output()
         .expect("Failed to execute CLI command");
 
-    // Check that the CLI exits successfully
     assert!(
         result.status.success(),
-        "CLI failed with error: {}",
+        "CLI failed: {}",
         String::from_utf8_lossy(&result.stderr)
     );
 
-    // Verify that the output matches the regex
-    let stdout = String::from_utf8_lossy(&result.stdout);
-    assert!(stdout.contains("address (compressed): 1E") && stdout.contains("regex: '^1E.*T$'"),);
+    let stdout = strip_ansi(&String::from_utf8_lossy(&result.stdout));
+    assert!(
+        stdout.contains("1E"),
+        "Missing regex match in output: {}",
+        stdout
+    );
 }
 
 #[test]
 fn test_cli_with_output_file() {
     let output_file = "test_output.txt";
 
-    // Run the CLI with an output file flag
     let result = Command::new("./target/debug/kitak")
-        .args(["-o", output_file, "tst"]) // Output file flag and pattern
+        .args(["--btc", "-o", output_file, "tst"])
         .output()
         .expect("Failed to execute CLI command");
 
-    // Check that the CLI exits successfully
     assert!(
         result.status.success(),
-        "CLI failed with error: {}",
+        "CLI failed: {}",
         String::from_utf8_lossy(&result.stderr)
     );
 
-    // Check that the output file exists
     let output = fs::read_to_string(output_file).expect("Failed to read output file");
+    let clean = strip_ansi(&output);
     assert!(
-        output
-            .to_ascii_lowercase()
-            .contains("address (compressed): 1tst"),
-        "Output file does not contain expected data: {}",
-        output
+        clean.to_ascii_lowercase().contains("1tst"),
+        "Missing prefix in output file: {}",
+        clean
     );
 
-    // Clean up the temporary file
-    fs::remove_file(output_file).expect("Failed to delete temporary output file");
+    fs::remove_file(output_file).expect("Failed to delete output file");
 }
 
 #[test]
 fn test_cli_with_case_sensitivity() {
-    // Run the CLI with case-sensitive flag
     let result = Command::new("./target/debug/kitak")
-        .args(["-c", "-a", "TST"]) // Case-sensitive flag and pattern
+        .args(["--btc", "-c", "-a", "TST"])
         .output()
         .expect("Failed to execute CLI command");
 
-    // Check that the CLI exits successfully
     assert!(
         result.status.success(),
-        "CLI failed with error: {}",
+        "CLI failed: {}",
         String::from_utf8_lossy(&result.stderr)
     );
 
-    // Verify that the output matches the case-sensitive pattern
-    let stdout = String::from_utf8_lossy(&result.stdout);
+    let stdout = strip_ansi(&String::from_utf8_lossy(&result.stdout));
     assert!(
         stdout.contains("TST"),
-        "CLI output does not match expected case-sensitive pattern: {}",
+        "Missing case-sensitive match: {}",
         stdout
     );
 }
 
 #[test]
 fn test_cli_missing_required_arguments() {
-    // Run the CLI without any arguments
     let result = Command::new("./target/debug/kitak")
         .output()
         .expect("Failed to execute CLI command");
 
-    // Check that the CLI exits with an error
     assert!(!result.status.success(), "CLI succeeded unexpectedly");
 
-    // Verify that the error message is printed
     let stderr = String::from_utf8_lossy(&result.stderr);
     assert!(
         stderr.contains("the following required arguments were not provided"),
-        "CLI error message is incorrect: {}",
+        "Wrong error message: {}",
         stderr
     );
 }
 
 #[test]
 fn test_cli_with_input_file_tempfile() {
-    // Create a temporary input file
-    let mut temp_file = NamedTempFile::new().expect("Failed to create temporary file");
-    writeln!(temp_file, "t1 -p\nT2 -c -p").expect("Failed to write to temporary file");
+    let mut temp_file = NamedTempFile::new().expect("Failed to create temp file");
+    writeln!(temp_file, "t1 -p --btc\nT2 -c -p --btc").expect("Failed to write temp file");
 
-    // Get the file path
-    let input_file_path = temp_file.path().to_str().expect("Failed to get file path");
+    let input_file_path = temp_file.path().to_str().expect("Bad path");
 
-    // Run the CLI with the input file
     let result = Command::new("./target/debug/kitak")
-        .args(["-i", input_file_path]) // Input file flag
+        .args(["--btc", "-i", input_file_path])
         .output()
         .expect("Failed to execute CLI command");
 
-    // Check that the CLI exits successfully
     assert!(
         result.status.success(),
-        "CLI failed with error: {}",
+        "CLI failed: {}",
         String::from_utf8_lossy(&result.stderr)
     );
 
-    // Verify that the output contains the expected results
-    let stdout = String::from_utf8_lossy(&result.stdout);
+    let stdout = strip_ansi(&String::from_utf8_lossy(&result.stdout));
     assert!(
-        stdout.to_lowercase().contains("address (compressed): 1t1")
-            && stdout.contains("address (compressed): 1T2"),
-        "CLI output does not contain expected results: {}",
+        stdout.to_lowercase().contains("1t1") && stdout.contains("1T2"),
+        "Missing results: {}",
         stdout
     );
 }

@@ -191,7 +191,7 @@ pub fn find_eth_vanity_raw(
     let found_any = Arc::new(AtomicBool::new(false));
     let total_checked = Arc::new(AtomicU64::new(0));
 
-    // Progress reporter thread
+    // Progress reporter thread with matrix-style scrambling address
     {
         let found_any = Arc::clone(&found_any);
         let total_checked = Arc::clone(&total_checked);
@@ -201,9 +201,15 @@ pub fn find_eth_vanity_raw(
             let start = Instant::now();
             let mut last_count = 0u64;
             let mut last_time = start;
+            let hex_chars: &[u8] = b"0123456789abcdefABCDEF";
+            let prefix_len = prefix_display.len();
+            let suffix_len = suffix_display.len();
+            let mid_len = 40 - prefix_len - suffix_len;
+
+            eprintln!();
 
             while !found_any.load(Ordering::Relaxed) {
-                thread::sleep(std::time::Duration::from_secs(2));
+                thread::sleep(std::time::Duration::from_millis(10));
                 if found_any.load(Ordering::Relaxed) {
                     break;
                 }
@@ -219,32 +225,49 @@ pub fn find_eth_vanity_raw(
                 } else {
                     0.0
                 };
-                let avg_speed = if elapsed > 0.0 {
-                    count as f64 / elapsed
+
+                let mins = (elapsed as u64) / 60;
+                let secs = (elapsed as u64) % 60;
+
+                let count_display = if count >= 1_000_000_000 {
+                    format!("{:.2}B", count as f64 / 1_000_000_000.0)
+                } else if count >= 1_000_000 {
+                    format!("{:.1}M", count as f64 / 1_000_000.0)
+                } else if count >= 1_000 {
+                    format!("{:.0}K", count as f64 / 1_000.0)
                 } else {
-                    0.0
+                    format!("{count}")
                 };
 
-                let suffix_info = if suffix_display.is_empty() {
-                    String::new()
-                } else {
-                    format!(" + suffix '{suffix_display}'")
-                };
+                // Matrix-style scrambling address
+                let scrambled: String = (0..mid_len)
+                    .map(|_| hex_chars[rand::random_range(0..hex_chars.len())] as char)
+                    .collect();
 
                 eprint!(
-                    "\r\x1b[K[{:.1}s] prefix '{}'{} | checked: {:.2}B | speed: {:.2}M keys/s (avg: {:.2}M keys/s)",
-                    elapsed,
+                    "\r\x1b[K  \x1b[90m{:02}:{:02}\x1b[0m  0x\x1b[32m{}\x1b[90m{}\x1b[32m{}\x1b[0m  \x1b[36m{:>8}\x1b[0m  \x1b[33m{:.1}M/s\x1b[0m",
+                    mins,
+                    secs,
                     prefix_display,
-                    suffix_info,
-                    count as f64 / 1_000_000_000.0,
+                    scrambled,
+                    suffix_display,
+                    count_display,
                     speed / 1_000_000.0,
-                    avg_speed / 1_000_000.0,
                 );
 
                 last_count = count;
                 last_time = now;
             }
-            eprintln!(); // newline after progress
+
+            let count = total_checked.load(Ordering::Relaxed);
+            let elapsed = start.elapsed().as_secs_f64();
+            let avg_speed = count as f64 / elapsed.max(0.001);
+            eprintln!(
+                "\r\x1b[K\n  \x1b[32m✓ FOUND\x1b[0m in \x1b[33m{:.1}s\x1b[0m  \x1b[90m({:.1}M checked, {:.1}M/s)\x1b[0m\n",
+                elapsed,
+                count as f64 / 1_000_000.0,
+                avg_speed / 1_000_000.0,
+            );
         });
     }
 

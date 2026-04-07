@@ -424,8 +424,8 @@ pub fn is_valid_base58_char(c: char) -> bool {
 /// Represents supported blockchain chains.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Chain {
-    #[default]
     Bitcoin,
+    #[default]
     Ethereum,
     Solana,
 }

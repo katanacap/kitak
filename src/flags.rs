@@ -56,23 +56,28 @@ pub enum PatternsSource {
 /// - Parses the number of threads, defaulting to 16 if not specified.
 /// - Detects whether patterns are provided via a single string or an input file.
 pub fn parse_cli(matches: ArgMatches) -> (VanityFlags, PatternsSource) {
-    // 1) Extract chain
-    let chain = if matches.get_flag("ethereum") {
-        Some(Chain::Ethereum)
+    // 1) Extract chain (default: Ethereum)
+    let chain = if matches.get_flag("bitcoin") {
+        Some(Chain::Bitcoin)
     } else if matches.get_flag("solana") {
         Some(Chain::Solana)
     } else {
-        Some(Chain::Bitcoin)
+        Some(Chain::Ethereum)
     };
 
-    // 2) Extract vanity mode
+    // 2) Extract suffix value and determine vanity mode
+    let suffix_pattern = matches.get_one::<String>("suffix").cloned();
+    let has_prefix = matches.get_flag("prefix");
+
     let vanity_mode = if matches.get_flag("regex") {
         Some(VanityMode::Regex)
     } else if matches.get_flag("anywhere") {
         Some(VanityMode::Anywhere)
-    } else if matches.get_flag("suffix") {
+    } else if suffix_pattern.is_some() && !has_prefix {
+        // -s alone → suffix-only mode
         Some(VanityMode::Suffix)
     } else {
+        // default or -p (with or without -s)
         Some(VanityMode::Prefix)
     };
 
@@ -83,14 +88,11 @@ pub fn parse_cli(matches: ArgMatches) -> (VanityFlags, PatternsSource) {
         .parse::<usize>()
         .unwrap_or(16);
 
-    // 4) Extract suffix-pattern
-    let suffix_pattern = matches.get_one::<String>("suffix-pattern").cloned();
-
     // 5) Build CLI-level `VanityFlags`
     let cli_flags = VanityFlags {
         force_flags: matches.get_flag("force-flags"),
         is_case_sensitive: matches.get_flag("case-sensitive"),
-        disable_fast_mode: matches.get_flag("disable-fast-mode"),
+        disable_fast_mode: true, // no length limit — progress bar shows if pattern is too long
         output_file_name: matches.get_one::<String>("output-file").cloned(),
         vanity_mode,
         chain,
