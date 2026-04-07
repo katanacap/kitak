@@ -120,9 +120,7 @@ pub fn find_eth_vanity_metal(
         let mut rng = rand::rng();
         let mut scalar_bytes = [0u8; 32];
         rand::Rng::fill_bytes(&mut rng, &mut scalar_bytes);
-        let start_scalar = <Scalar as Reduce<U256>>::reduce_bytes(
-            &k256::elliptic_curve::generic_array::GenericArray::from(scalar_bytes),
-        );
+        let start_scalar = <Scalar as Reduce<U256>>::reduce_bytes(&scalar_bytes.into());
         let start_point = ProjectivePoint::GENERATOR * start_scalar;
 
         // Generate projective points in chunks and batch normalize

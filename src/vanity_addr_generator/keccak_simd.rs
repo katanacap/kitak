@@ -9,6 +9,7 @@
 #[cfg(target_arch = "aarch64")]
 use std::arch::aarch64::*;
 
+#[cfg(target_arch = "aarch64")]
 const RC: [u64; 24] = [
     0x0000000000000001,
     0x0000000000008082,
@@ -37,6 +38,7 @@ const RC: [u64; 24] = [
 ];
 
 /// Rotate left with compile-time constant shift using immediate NEON ops.
+#[cfg(target_arch = "aarch64")]
 macro_rules! rotl {
     ($a:expr, $left:literal, $right:literal) => {
         vorrq_u64(vshlq_n_u64::<$left>($a), vshrq_n_u64::<$right>($a))

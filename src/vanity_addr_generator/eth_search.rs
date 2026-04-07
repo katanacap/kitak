@@ -264,7 +264,7 @@ pub fn find_eth_vanity_raw(
             rng.fill_bytes(&mut scalar_bytes);
             let start_scalar =
                 <Scalar as k256::elliptic_curve::ops::Reduce<k256::U256>>::reduce_bytes(
-                    &k256::elliptic_curve::generic_array::GenericArray::from(scalar_bytes),
+                    &scalar_bytes.into(),
                 );
             let start_point = ProjectivePoint::GENERATOR * start_scalar;
 

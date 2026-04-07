@@ -86,8 +86,8 @@ kitak [OPTIONS] <PATTERN>
 
 | Flag | Chain |
 |------|-------|
-| `--btc` | Bitcoin |
 | `--eth` | Ethereum (default) |
+| `--btc` | Bitcoin |
 | `--sol` | Solana |
 
 ### Pattern modes

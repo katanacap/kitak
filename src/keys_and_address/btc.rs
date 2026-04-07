@@ -77,7 +77,7 @@ impl KeyPairGenerator for BitcoinKeyPair {
         });
         let start_scalar =
             <K256Scalar as k256::elliptic_curve::ops::Reduce<k256::U256>>::reduce_bytes(
-                &k256::elliptic_curve::generic_array::GenericArray::from(scalar_bytes),
+                &scalar_bytes.into(),
             );
         let start_point = ProjectivePoint::GENERATOR * start_scalar;
 
@@ -104,7 +104,7 @@ impl KeyPairGenerator for BitcoinKeyPair {
             let offset = K256Scalar::from(i as u64);
             let secret_scalar = start_scalar + offset;
             let sk_bytes = secret_scalar.to_bytes();
-            let secp_sk = bitcoin::secp256k1::SecretKey::from_slice(sk_bytes.as_slice()).unwrap();
+            let secp_sk = bitcoin::secp256k1::SecretKey::from_slice(&sk_bytes).unwrap();
             slot.private_key = PrivateKey::new(secp_sk, Bitcoin);
 
             // Reuse String buffer for address
