@@ -44,7 +44,7 @@ kitak doesn't just brute-force harder — it eliminates unnecessary work:
 ## Quick start
 
 ```bash
-# Install (Ethereum included by default)
+# Install
 cargo install kitak
 
 # Find an ETH address starting with "dead"
@@ -63,17 +63,17 @@ kitak --sol -s 123
 ## Installation
 
 ```bash
-cargo install kitak                       # Ethereum + Bitcoin (default)
-cargo install kitak --features solana     # + Solana
-cargo install kitak --features all        # Everything
+cargo install kitak
 ```
 
-Or build from source:
+All chains (Bitcoin, Ethereum, Solana) are included by default.
+
+Build from source:
 
 ```bash
 git clone https://github.com/katanacap/kitak.git
 cd kitak
-cargo build --release --features all
+cargo build --release
 ```
 
 ## CLI reference
@@ -144,7 +144,7 @@ abc -s --sol
 
 ```toml
 [dependencies]
-kitak = "3.1"
+kitak = "3.1"  # all chains included by default
 ```
 
 ### Basic
