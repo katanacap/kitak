@@ -1,19 +1,19 @@
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-use kitak::cli::cli;
-use kitak::error::VanityError;
-use kitak::file::{parse_input_file, write_output_file};
-use kitak::flags::{parse_cli, PatternsSource, VanityFlags};
-use kitak::keys_and_address::BitcoinKeyPair;
-use kitak::vanity_addr_generator::chain::Chain;
-use kitak::vanity_addr_generator::vanity_addr::{VanityAddr, VanityMode};
 #[cfg(feature = "ethereum")]
 use kitak::EthereumKeyPair;
 #[cfg(any(feature = "ethereum", feature = "solana"))]
 use kitak::KeyPairGenerator;
 #[cfg(feature = "solana")]
 use kitak::SolanaKeyPair;
+use kitak::cli::cli;
+use kitak::error::VanityError;
+use kitak::file::{parse_input_file, write_output_file};
+use kitak::flags::{PatternsSource, VanityFlags, parse_cli};
+use kitak::keys_and_address::BitcoinKeyPair;
+use kitak::vanity_addr_generator::chain::Chain;
+use kitak::vanity_addr_generator::vanity_addr::{VanityAddr, VanityMode};
 
 #[cfg(feature = "solana")]
 use bitcoin::hex::DisplayHex;

@@ -8,10 +8,10 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::Path;
 
+use crate::VanityMode;
 use crate::error::VanityError;
 use crate::flags::VanityFlags;
 use crate::vanity_addr_generator::chain::Chain;
-use crate::VanityMode;
 
 /// Represents a single line item from an input file,
 /// containing a vanity pattern and associated flags.
@@ -90,10 +90,10 @@ fn parse_line(line: &str) -> Option<FileLineItem> {
     // output file name: look for `-o` or `--output-file` plus the next token
     let mut output_file_name: Option<String> = None;
     for (i, &flag) in flags_vec.iter().enumerate() {
-        if flag == "-o" || flag == "--output-file" {
-            if let Some(next_flag) = flags_vec.get(i + 1) {
-                output_file_name = Some(next_flag.to_string());
-            }
+        if (flag == "-o" || flag == "--output-file")
+            && let Some(next_flag) = flags_vec.get(i + 1)
+        {
+            output_file_name = Some(next_flag.to_string());
         }
     }
 
@@ -164,7 +164,7 @@ pub fn write_output_file(output_path: &Path, buffer: &str) -> Result<(), VanityE
         Err(e) => {
             return Err(VanityError::FileError(io::Error::other(format!(
                 "Failed to open or create file: {e}"
-            ))))
+            ))));
         }
     };
 

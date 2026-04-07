@@ -5,8 +5,8 @@
 //! - GPU computes Keccak256 + pattern matching in parallel (thousands of threads)
 //! - Apple Silicon unified memory = zero-copy data transfer
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use k256::elliptic_curve::ops::Reduce;
 use k256::elliptic_curve::sec1::ToEncodedPoint;

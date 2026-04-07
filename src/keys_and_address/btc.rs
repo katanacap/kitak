@@ -5,14 +5,14 @@
 use std::cell::RefCell;
 use std::fmt::Write;
 
-use crate::keys_and_address::{BitcoinKeyPair, KeyPairGenerator};
 use crate::BATCH_SIZE;
+use crate::keys_and_address::{BitcoinKeyPair, KeyPairGenerator};
 
-use bitcoin::key::rand::rngs::ThreadRng;
-use bitcoin::key::{PrivateKey, PublicKey};
-use bitcoin::secp256k1::{rand, All, Scalar, Secp256k1};
 use bitcoin::Address;
 use bitcoin::Network::Bitcoin;
+use bitcoin::key::rand::rngs::ThreadRng;
+use bitcoin::key::{PrivateKey, PublicKey};
+use bitcoin::secp256k1::{All, Scalar, Secp256k1, rand};
 
 thread_local! {
     static THREAD_LOCAL_SECP256K1: Secp256k1<All> = Secp256k1::new();

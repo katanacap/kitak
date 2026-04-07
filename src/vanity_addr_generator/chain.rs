@@ -5,13 +5,13 @@
 //! - Input validation for both plain and regex patterns.
 //! - Adjustments to inputs and patterns for chain-specific constraints.
 
+use crate::VanityMode;
 use crate::error::VanityError;
 #[cfg(feature = "ethereum")]
 use crate::keys_and_address::EthereumKeyPair;
 #[cfg(feature = "solana")]
 use crate::keys_and_address::SolanaKeyPair;
 use crate::keys_and_address::{BitcoinKeyPair, KeyPairGenerator};
-use crate::VanityMode;
 
 /// Maximum length constraints for fast mode and general input.
 const BASE58_FAST_MODE_MAX: usize = 5;

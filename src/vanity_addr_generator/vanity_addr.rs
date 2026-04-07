@@ -7,16 +7,16 @@
 //! - Pattern matching using prefix, suffix, anywhere, and regex modes.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 use std::thread;
 
+use crate::BATCH_SIZE;
 use crate::error::VanityError;
 use crate::vanity_addr_generator::chain::VanityChain;
 use crate::vanity_addr_generator::comp::{
     contains_case_insensitive, contains_memx, eq_prefix_case_insensitive, eq_prefix_memx,
     eq_suffix_case_insensitive, eq_suffix_memx,
 };
-use crate::BATCH_SIZE;
 
 use regex::Regex;
 
@@ -341,9 +341,11 @@ mod tests {
             .unwrap();
 
             let vanity_addr_starts_with = "1et";
-            assert!(keys_and_address
-                .get_comp_address()
-                .starts_with(vanity_addr_starts_with));
+            assert!(
+                keys_and_address
+                    .get_comp_address()
+                    .starts_with(vanity_addr_starts_with)
+            );
         }
 
         #[test]
@@ -532,10 +534,12 @@ mod tests {
             .unwrap();
 
             let expected_prefix = "ab";
-            assert!(keys_and_address
-                .get_address()
-                .to_lowercase()
-                .starts_with(expected_prefix));
+            assert!(
+                keys_and_address
+                    .get_address()
+                    .to_lowercase()
+                    .starts_with(expected_prefix)
+            );
         }
 
         #[test]
@@ -711,9 +715,11 @@ mod tests {
             .unwrap();
 
             let vanity_addr_starts_with = "et";
-            assert!(keys_and_address
-                .get_address()
-                .starts_with(vanity_addr_starts_with));
+            assert!(
+                keys_and_address
+                    .get_address()
+                    .starts_with(vanity_addr_starts_with)
+            );
         }
 
         #[test]

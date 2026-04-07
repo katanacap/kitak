@@ -4,7 +4,7 @@
 
 use crate::keys_and_address::{KeyPairGenerator, SolanaKeyPair};
 
-use rand::{rngs::ThreadRng, RngCore};
+use rand::{Rng, rngs::ThreadRng};
 use solana_sdk::bs58;
 use solana_sdk::signature::{Keypair, SeedDerivable, Signer};
 use std::cell::RefCell;

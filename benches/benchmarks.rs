@@ -1,15 +1,15 @@
 use std::hint::black_box;
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 
+#[cfg(feature = "ethereum")]
+use kitak::EthereumKeyPair;
 use kitak::keys_and_address::BitcoinKeyPair;
 use kitak::vanity_addr_generator::comp::{
     contains_case_insensitive, contains_memx, eq_prefix_case_insensitive, eq_prefix_memx,
     eq_suffix_case_insensitive, eq_suffix_memx,
 };
-#[cfg(feature = "ethereum")]
-use kitak::EthereumKeyPair;
-use kitak::{KeyPairGenerator, VanityAddr, VanityMode, BATCH_SIZE};
+use kitak::{BATCH_SIZE, KeyPairGenerator, VanityAddr, VanityMode};
 
 // ---------------------------------------------------------------------------
 // Bitcoin keypair generation benchmarks

@@ -12,7 +12,7 @@
 //! - **Combined prefix+suffix** — checks both in a single pass
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::Instant;
 

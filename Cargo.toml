@@ -1,9 +1,9 @@
 [package]
 name = "kitak"
-version = "3.0.0"
+version = "3.0.1"
 authors = ["Emirhan TALA <tala.emirhan@gmail.com>", "kio <kio@katana.capital>"]
 description = "A blazingly fast Bitcoin, Ethereum, and Solana vanity address generator."
-edition = "2021"
+edition = "2024"
 license = "Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/katanacap/kitak"
@@ -29,7 +29,7 @@ tiny-keccak = { version = "2.0", features = ["keccak"], optional = true }
 metal = { version = "0.33", optional = true }
 
 # Dependencies for Solana support
-solana-sdk = { version = "4.0.1", default-features = false, features = ["full"], optional = true }
+solana-sdk = { version = "2", default-features = false, features = ["full"], optional = true }
 openssl = { version = "0.10", features = ["vendored"], optional = true }
 aho-corasick = "1.1.3"
 

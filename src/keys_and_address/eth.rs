@@ -4,11 +4,11 @@
 
 use std::cell::RefCell;
 
-use crate::keys_and_address::{EthereumKeyPair, KeyPairGenerator};
 use crate::BATCH_SIZE;
+use crate::keys_and_address::{EthereumKeyPair, KeyPairGenerator};
 
 use hex::encode;
-use rand::{rngs::ThreadRng, Rng};
+use rand::{Rng, rngs::ThreadRng};
 use secp256k1::{All, PublicKey, Scalar, Secp256k1, SecretKey};
 use sha3::{Digest, Keccak256};
 
