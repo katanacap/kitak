@@ -123,7 +123,7 @@ fn test_cli_missing_required_arguments() {
 
     let stderr = String::from_utf8_lossy(&result.stderr);
     assert!(
-        stderr.contains("the following required arguments were not provided"),
+        stderr.contains("provide a pattern") || stderr.contains("required arguments"),
         "Wrong error message: {}",
         stderr
     );

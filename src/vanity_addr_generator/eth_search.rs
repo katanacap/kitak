@@ -245,7 +245,7 @@ pub fn find_eth_vanity_raw(
                     .collect();
 
                 eprint!(
-                    "\r\x1b[K  \x1b[90m{:02}:{:02}\x1b[0m  0x\x1b[32m{}\x1b[90m{}\x1b[32m{}\x1b[0m  \x1b[36m{:>8}\x1b[0m  \x1b[33m{:.1}M/s\x1b[0m",
+                    "\r\x1b[K  \x1b[37m{:02}:{:02}\x1b[0m  0x\x1b[1;32m{}\x1b[36m{}\x1b[1;32m{}\x1b[0m  \x1b[1;37m{:>8}\x1b[0m  \x1b[1;33m{:.1}M/s\x1b[0m",
                     mins,
                     secs,
                     prefix_display,

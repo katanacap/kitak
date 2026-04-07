@@ -123,16 +123,14 @@ pub fn cli() -> Command {
         .arg(
             Arg::new("string")
                 .index(1)
-                .required_unless_present_any(["input-file", "suffix"])
                 .help("The string (or regex) used to match vanity addresses."),
         )
         .arg(
             Arg::new("input-file")
                 .short('i')
                 .long("input-file")
-                .required_unless_present_any(["string"])
                 .value_name("FILE")
-                .help("Reads patterns and it's flags from the specified file for vanity address generation, with one pattern and it's flags per line."),
+                .help("Reads patterns from file, one per line with optional flags."),
         )
         .arg(
             Arg::new("output-file")

@@ -104,11 +104,20 @@ pub fn parse_cli(matches: ArgMatches) -> (VanityFlags, PatternsSource) {
     if let Some(path) = matches.get_one::<String>("input-file") {
         (cli_flags, PatternsSource::InputFile(path.to_string()))
     } else {
-        let string = matches.get_one::<String>("string");
-        (
-            cli_flags,
-            PatternsSource::SingleString(string.unwrap_or(&String::new()).to_string()),
-        )
+        let string = matches
+            .get_one::<String>("string")
+            .cloned()
+            .unwrap_or_default();
+
+        // Must have at least a positional pattern or -s suffix
+        if string.is_empty() && cli_flags.suffix_pattern.is_none() {
+            eprintln!("error: provide a pattern or use -s <suffix>\n");
+            eprintln!("Usage: kitak [OPTIONS] <pattern>");
+            eprintln!("       kitak -s <suffix>");
+            std::process::exit(1);
+        }
+
+        (cli_flags, PatternsSource::SingleString(string))
     }
 }
 
