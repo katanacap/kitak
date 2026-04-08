@@ -14,7 +14,7 @@ kitak generates crypto wallet keypairs where the address matches a pattern you c
 ```
 $ kitak -p 1111 -s 1111 -t 6
 
-  ━━━ kitak v3.1.1 ━━━
+  ━━━ kitak v3.2.1 ━━━
 
   ETH  prefix 1111 ... 1111  (6 threads)
 
@@ -58,11 +58,14 @@ kitak -p 1111 -s 1111 -t 8
 # ETH suffix only
 kitak -s beef
 
+# BTC prefix + suffix
+kitak --btc -p te -s st
+
+# SOL prefix + suffix
+kitak --sol -p ab -s cd
+
 # BTC containing 'test'
 kitak --btc -a test
-
-# SOL suffix
-kitak --sol -s abc
 ```
 
 ## Installation
@@ -159,7 +162,7 @@ abc -s --sol
 
 ```toml
 [dependencies]
-kitak = "3.2"  # all chains included by default
+kitak = "3.2.1"  # all chains included by default
 ```
 
 ### Basic

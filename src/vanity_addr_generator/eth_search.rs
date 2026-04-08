@@ -241,13 +241,17 @@ pub fn find_eth_vanity_raw(
             let prefix_len = prefix_display.len();
             let suffix_len = suffix_display.len();
             let mid_len = 40 - prefix_len - suffix_len;
-
-            eprintln!();
+            let mut displayed = false;
 
             while !found_any.load(Ordering::Relaxed) {
                 thread::sleep(std::time::Duration::from_millis(10));
                 if found_any.load(Ordering::Relaxed) {
                     break;
+                }
+
+                if !displayed {
+                    eprintln!();
+                    displayed = true;
                 }
 
                 let count = total_checked.load(Ordering::Relaxed);
@@ -275,7 +279,6 @@ pub fn find_eth_vanity_raw(
                     format!("{count}")
                 };
 
-                // Matrix-style scrambling address
                 let scrambled: String = (0..mid_len)
                     .map(|_| hex_chars[rand::random_range(0..hex_chars.len())] as char)
                     .collect();
@@ -298,8 +301,11 @@ pub fn find_eth_vanity_raw(
             let count = total_checked.load(Ordering::Relaxed);
             let elapsed = start.elapsed().as_secs_f64();
             let avg_speed = count as f64 / elapsed.max(0.001);
+            if displayed {
+                eprint!("\r\x1b[K");
+            }
             eprintln!(
-                "\r\x1b[K\n  \x1b[32m✓ FOUND\x1b[0m in \x1b[33m{:.1}s\x1b[0m  \x1b[90m({:.1}M checked, {:.1}M/s)\x1b[0m\n",
+                "\n  \x1b[32m✓ FOUND\x1b[0m in \x1b[33m{:.1}s\x1b[0m  \x1b[90m({:.1}M checked, {:.1}M/s)\x1b[0m\n",
                 elapsed,
                 count as f64 / 1_000_000.0,
                 avg_speed / 1_000_000.0,
@@ -410,9 +416,12 @@ pub fn find_eth_vanity_raw(
         });
     }
 
-    Ok(receiver
+    let result = receiver
         .recv()
-        .expect("Receiver closed before a matching address was found"))
+        .expect("Receiver closed before a matching address was found");
+    // Let progress thread finish printing ✓ FOUND
+    thread::sleep(std::time::Duration::from_millis(50));
+    Ok(result)
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 [package]
 name = "kitak"
-version = "3.2.0"
+version = "3.2.1"
 authors = ["Emirhan TALA <tala.emirhan@gmail.com>", "kio <kio@katana.capital>"]
 description = "A blazingly fast Bitcoin, Ethereum, and Solana vanity address generator."
 edition = "2024"

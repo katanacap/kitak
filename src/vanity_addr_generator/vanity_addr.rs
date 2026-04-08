@@ -6,9 +6,10 @@
 //! - Multi-threaded generation of vanity addresses.
 //! - Pattern matching using prefix, suffix, anywhere, and regex modes.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, mpsc};
 use std::thread;
+use std::time::Instant;
 
 use crate::BATCH_SIZE;
 use crate::error::VanityError;
@@ -74,9 +75,43 @@ impl VanityAddr {
 
         Ok(SearchEngines::find_vanity_address::<T>(
             adjusted_string,
+            None,
             threads,
             case_sensitive,
             vanity_mode,
+        ))
+    }
+
+    /// Generate with combined prefix + suffix matching.
+    pub fn generate_prefix_suffix<T: VanityChain + 'static>(
+        prefix: &str,
+        suffix: &str,
+        threads: usize,
+        case_sensitive: bool,
+        fast_mode: bool,
+    ) -> Result<T, VanityError> {
+        T::validate_input(prefix, fast_mode, case_sensitive)?;
+        if !suffix.is_empty() {
+            T::validate_input(suffix, fast_mode, case_sensitive)?;
+        }
+        let adjusted_prefix = T::adjust_input(prefix, VanityMode::Prefix);
+
+        if prefix.is_empty() && suffix.is_empty() {
+            return Ok(T::generate_random());
+        }
+
+        let suffix_adjusted = if suffix.is_empty() {
+            None
+        } else {
+            Some(suffix.to_string())
+        };
+
+        Ok(SearchEngines::find_vanity_address::<T>(
+            adjusted_prefix,
+            suffix_adjusted,
+            threads,
+            case_sensitive,
+            VanityMode::Prefix,
         ))
     }
 
@@ -133,6 +168,7 @@ impl SearchEngines {
     /// - Uses an `mpsc` channel to send the matching address back to the main thread.
     fn find_vanity_address<T: VanityChain + 'static>(
         string: String,
+        suffix: Option<String>,
         threads: usize,
         case_sensitive: bool,
         vanity_mode: VanityMode,
@@ -147,21 +183,123 @@ impl SearchEngines {
             vec![]
         };
 
+        // Prepare suffix bytes for combined prefix+suffix
+        let suffix_bytes = suffix.as_deref().unwrap_or("").as_bytes().to_vec();
+        let lower_suffix_bytes: Vec<u8> = if !case_sensitive {
+            suffix_bytes
+                .iter()
+                .map(|b| b.to_ascii_lowercase())
+                .collect()
+        } else {
+            vec![]
+        };
+        let has_suffix = !suffix_bytes.is_empty();
+
         let (sender, receiver) = mpsc::channel();
         let found_any = Arc::new(AtomicBool::new(false));
+        let total_checked = Arc::new(AtomicU64::new(0));
+
+        // Progress reporter thread with matrix-style scrambling
+        {
+            let found_any = Arc::clone(&found_any);
+            let total_checked = Arc::clone(&total_checked);
+            let pattern_display = string.clone();
+            let suffix_display = suffix.clone().unwrap_or_default();
+            thread::spawn(move || {
+                let start = Instant::now();
+                let mut last_count = 0u64;
+                let mut last_time = start;
+                // Base58 charset (no 0, O, I, l)
+                let b58_chars: &[u8] =
+                    b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+                let prefix_len = pattern_display.len();
+                let suffix_len = suffix_display.len();
+                let addr_len: usize = 34; // approximate for display
+                let mid_len = addr_len.saturating_sub(prefix_len + suffix_len);
+                let mut displayed = false;
+
+                while !found_any.load(Ordering::Relaxed) {
+                    thread::sleep(std::time::Duration::from_millis(10));
+                    if found_any.load(Ordering::Relaxed) {
+                        break;
+                    }
+
+                    if !displayed {
+                        eprintln!();
+                        displayed = true;
+                    }
+
+                    let count = total_checked.load(Ordering::Relaxed);
+                    let elapsed = start.elapsed().as_secs_f64();
+                    let now = Instant::now();
+                    let interval = now.duration_since(last_time).as_secs_f64();
+                    let interval_keys = count - last_count;
+
+                    let speed = if interval > 0.0 {
+                        interval_keys as f64 / interval
+                    } else {
+                        0.0
+                    };
+
+                    let mins = (elapsed as u64) / 60;
+                    let secs = (elapsed as u64) % 60;
+
+                    let count_display = if count >= 1_000_000_000 {
+                        format!("{:.2}B", count as f64 / 1_000_000_000.0)
+                    } else if count >= 1_000_000 {
+                        format!("{:.1}M", count as f64 / 1_000_000.0)
+                    } else if count >= 1_000 {
+                        format!("{:.0}K", count as f64 / 1_000.0)
+                    } else {
+                        format!("{count}")
+                    };
+
+                    let scrambled: String = (0..mid_len)
+                        .map(|_| b58_chars[rand::random_range(0..b58_chars.len())] as char)
+                        .collect();
+
+                    eprint!(
+                        "\r\x1b[K  \x1b[37m{:02}:{:02}\x1b[0m  \x1b[1;32m{}\x1b[36m{}\x1b[1;32m{}\x1b[0m  \x1b[1;37m{:>8}\x1b[0m  \x1b[1;33m{:.1}M/s\x1b[0m",
+                        mins,
+                        secs,
+                        pattern_display,
+                        scrambled,
+                        suffix_display,
+                        count_display,
+                        speed / 1_000_000.0,
+                    );
+
+                    last_count = count;
+                    last_time = now;
+                }
+
+                let count = total_checked.load(Ordering::Relaxed);
+                let elapsed = start.elapsed().as_secs_f64();
+                let avg_speed = count as f64 / elapsed.max(0.001);
+                let prefix = if displayed { "\r\x1b[K\n" } else { "" };
+                eprintln!(
+                    "{prefix}\n  \x1b[32m✓ FOUND\x1b[0m in \x1b[33m{:.1}s\x1b[0m  \x1b[90m({:.1}M checked, {:.1}M/s)\x1b[0m\n",
+                    elapsed,
+                    count as f64 / 1_000_000.0,
+                    avg_speed / 1_000_000.0,
+                );
+            });
+        }
 
         for _ in 0..threads {
             let sender = sender.clone();
             let found_any = found_any.clone();
+            let total_checked = Arc::clone(&total_checked);
 
             let thread_string_bytes = string_bytes.to_vec();
             let thread_lower_string_bytes = lower_string_bytes.clone();
+            let thread_suffix_bytes = suffix_bytes.clone();
+            let thread_lower_suffix_bytes = lower_suffix_bytes.clone();
 
             thread::spawn(move || {
                 let mut batch: [T; BATCH_SIZE] = T::generate_batch();
                 let mut dummy = T::generate_random();
 
-                // Pre-compute pattern length for efficiency
                 let pattern_len = if case_sensitive {
                     thread_string_bytes.len()
                 } else {
@@ -169,18 +307,14 @@ impl SearchEngines {
                 };
 
                 while !found_any.load(Ordering::Relaxed) {
-                    // Generate a batch of addresses
                     T::fill_batch(&mut batch);
 
-                    // Check each address in the batch with loop unrolling for better performance
                     let mut i = 0;
                     while i < BATCH_SIZE {
-                        // Process multiple addresses per iteration to improve cache efficiency
                         let end = std::cmp::min(i + 8, BATCH_SIZE);
 
                         #[allow(clippy::needless_range_loop)]
                         for j in i..end {
-                            // Early exit check every few iterations to minimize atomic load overhead
                             if j.is_multiple_of(4) && found_any.load(Ordering::Relaxed) {
                                 return;
                             }
@@ -188,13 +322,11 @@ impl SearchEngines {
                             let keys_and_address = &batch[j];
                             let address_bytes = keys_and_address.get_address_bytes();
 
-                            // Early length check to avoid expensive pattern matching
                             if address_bytes.len() < pattern_len {
                                 continue;
                             }
 
-                            let matches = if case_sensitive {
-                                // Uses memx (good for case-sensitive)
+                            let prefix_matches = if case_sensitive {
                                 match vanity_mode {
                                     VanityMode::Prefix => {
                                         eq_prefix_memx(address_bytes, &thread_string_bytes)
@@ -205,12 +337,9 @@ impl SearchEngines {
                                     VanityMode::Anywhere => {
                                         contains_memx(address_bytes, &thread_string_bytes)
                                     }
-                                    VanityMode::Regex => {
-                                        unreachable!("Regex mode should not be handled here")
-                                    }
+                                    VanityMode::Regex => unreachable!(),
                                 }
                             } else {
-                                // Uses optimized case-insensitive functions
                                 match vanity_mode {
                                     VanityMode::Prefix => eq_prefix_case_insensitive(
                                         address_bytes,
@@ -224,37 +353,45 @@ impl SearchEngines {
                                         address_bytes,
                                         &thread_lower_string_bytes,
                                     ),
-                                    VanityMode::Regex => {
-                                        unreachable!("Regex mode should not be handled here")
-                                    }
+                                    VanityMode::Regex => unreachable!(),
                                 }
                             };
 
-                            // If match found...
+                            // Check suffix if combined mode
+                            let matches = prefix_matches
+                                && (!has_suffix
+                                    || if case_sensitive {
+                                        eq_suffix_memx(address_bytes, &thread_suffix_bytes)
+                                    } else {
+                                        eq_suffix_case_insensitive(
+                                            address_bytes,
+                                            &thread_lower_suffix_bytes,
+                                        )
+                                    });
+
                             if matches {
-                                // Mark as found (and check if we are the first)
                                 if !found_any.swap(true, Ordering::Relaxed) {
-                                    // We're the first thread to set found_any = true
-                                    // Attempt to send the result
                                     std::mem::swap(&mut batch[j], &mut dummy);
                                     let _ = sender.send(dummy);
                                 }
-                                // Return immediately: no need to generate more
                                 return;
                             }
                         }
 
                         i = end;
                     }
+
+                    total_checked.fetch_add(BATCH_SIZE as u64, Ordering::Relaxed);
                 }
             });
         }
 
-        // The main thread just waits for the first successful result.
-        // As soon as one thread sends over the channel, we have our vanity address.
-        receiver
+        let result = receiver
             .recv()
-            .expect("Receiver closed before a vanity address was found")
+            .expect("Receiver closed before a vanity address was found");
+        // Let progress thread finish printing ✓ FOUND
+        thread::sleep(std::time::Duration::from_millis(50));
+        result
     }
 
     /// Searches for a vanity address matching the given regex pattern.

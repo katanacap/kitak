@@ -109,12 +109,12 @@ pub fn parse_cli(matches: ArgMatches) -> (VanityFlags, PatternsSource) {
             .cloned()
             .unwrap_or_default();
 
-        // Must have at least a positional pattern or -s suffix
+        // No pattern provided — show help
         if string.is_empty() && cli_flags.suffix_pattern.is_none() {
-            eprintln!("error: provide a pattern or use -s <suffix>\n");
-            eprintln!("Usage: kitak [OPTIONS] <pattern>");
-            eprintln!("       kitak -s <suffix>");
-            std::process::exit(1);
+            // Re-create CLI to print help, then exit
+            let _ = crate::cli::cli().print_help();
+            eprintln!();
+            std::process::exit(0);
         }
 
         (cli_flags, PatternsSource::SingleString(string))

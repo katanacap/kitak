@@ -15,24 +15,31 @@ use kitak::keys_and_address::BitcoinKeyPair;
 use kitak::vanity_addr_generator::chain::Chain;
 use kitak::vanity_addr_generator::vanity_addr::{VanityAddr, VanityMode};
 
-use clap::error::ErrorKind;
 use std::path::Path;
 use std::process;
-use std::time::Instant;
 
 /// Generates and formats a vanity address depending on the chain.
 /// Returns a `Result<String, String>` where the `Ok(String)` is the final formatted output.
 fn generate_vanity_address(pattern: &str, vanity_flags: &VanityFlags) -> Result<String, String> {
-    let start = Instant::now();
+    let chain = vanity_flags.chain.unwrap_or(Chain::Ethereum);
 
-    // "Inline" everything in each arm so we get a single `Result<String, String>`
-    let out = match vanity_flags.chain.unwrap_or(Chain::Ethereum) {
+    let suffix_pat = vanity_flags.suffix_pattern.as_deref().unwrap_or("");
+
+    let out = match chain {
         Chain::Bitcoin => {
-            // 1) Generate the Bitcoin vanity
             let result: Result<BitcoinKeyPair, VanityError> =
                 match vanity_flags.vanity_mode.unwrap_or(VanityMode::Prefix) {
                     VanityMode::Regex => {
                         VanityAddr::generate_regex::<BitcoinKeyPair>(pattern, vanity_flags.threads)
+                    }
+                    VanityMode::Prefix if !suffix_pat.is_empty() => {
+                        VanityAddr::generate_prefix_suffix::<BitcoinKeyPair>(
+                            pattern,
+                            suffix_pat,
+                            vanity_flags.threads,
+                            vanity_flags.is_case_sensitive,
+                            !vanity_flags.disable_fast_mode,
+                        )
                     }
                     _ => VanityAddr::generate::<BitcoinKeyPair>(
                         pattern,
@@ -62,7 +69,6 @@ fn generate_vanity_address(pattern: &str, vanity_flags: &VanityFlags) -> Result<
         #[cfg(feature = "ethereum")]
         Chain::Ethereum => {
             let mode = vanity_flags.vanity_mode.unwrap_or(VanityMode::Prefix);
-            let suffix_pat = vanity_flags.suffix_pattern.as_deref().unwrap_or("");
 
             let result: Result<EthereumKeyPair, VanityError> = match mode {
                 VanityMode::Regex => {
@@ -124,6 +130,15 @@ fn generate_vanity_address(pattern: &str, vanity_flags: &VanityFlags) -> Result<
                     VanityMode::Regex => {
                         VanityAddr::generate_regex::<SolanaKeyPair>(pattern, vanity_flags.threads)
                     }
+                    VanityMode::Prefix if !suffix_pat.is_empty() => {
+                        VanityAddr::generate_prefix_suffix::<SolanaKeyPair>(
+                            pattern,
+                            suffix_pat,
+                            vanity_flags.threads,
+                            vanity_flags.is_case_sensitive,
+                            !vanity_flags.disable_fast_mode,
+                        )
+                    }
                     _ => VanityAddr::generate::<SolanaKeyPair>(
                         pattern,
                         vanity_flags.threads,
@@ -155,11 +170,7 @@ fn generate_vanity_address(pattern: &str, vanity_flags: &VanityFlags) -> Result<
     };
 
     match out {
-        Ok(s) => {
-            let seconds = start.elapsed().as_secs_f64();
-            eprintln!("  \x1b[32;1m✓ FOUND\x1b[0m in \x1b[33m{seconds:.2}s\x1b[0m\n");
-            Ok(s)
-        }
+        Ok(s) => Ok(s),
         Err(e) => Err(format!("\x1b[31m✗\x1b[0m Skipping: {e}\n")),
     }
 }
@@ -257,14 +268,7 @@ fn main() {
     let (cli_flags, source) = match app.try_get_matches() {
         Ok(matches) => parse_cli(matches),
         Err(err) => {
-            if err.kind() == ErrorKind::MissingRequiredArgument {
-                eprintln!(
-                    "error: the following required arguments were not provided:\n  --input-file <input-file> OR <string>\n"
-                );
-                eprintln!("Usage: kitak [OPTIONS] <string>");
-            } else {
-                eprintln!("{err}");
-            }
+            eprintln!("{err}");
             process::exit(1);
         }
     };

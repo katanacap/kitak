@@ -114,18 +114,18 @@ fn test_cli_with_case_sensitivity() {
 }
 
 #[test]
-fn test_cli_missing_required_arguments() {
+fn test_cli_no_args_shows_help() {
     let result = Command::new("./target/debug/kitak")
         .output()
         .expect("Failed to execute CLI command");
 
-    assert!(!result.status.success(), "CLI succeeded unexpectedly");
+    assert!(result.status.success(), "CLI should show help and exit 0");
 
-    let stderr = String::from_utf8_lossy(&result.stderr);
+    let stdout = String::from_utf8_lossy(&result.stdout);
     assert!(
-        stderr.contains("provide a pattern") || stderr.contains("required arguments"),
-        "Wrong error message: {}",
-        stderr
+        stdout.contains("KITAK") || stdout.contains("kitak") || stdout.contains("Examples"),
+        "Should show help output: {}",
+        stdout
     );
 }
 
